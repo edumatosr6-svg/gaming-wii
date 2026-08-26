@@ -29,6 +29,12 @@ etc.) — restrição das diretivas. As rotas dinâmicas exigidas são mínimas:
 formatação local dos arquivos JS estáticos — não introduz build step nem dependência de
 runtime).
 
+`playwright` (Python) dirigindo Chromium: exigido pelos testes de integração em
+navegador headless (W11–W19), que são obrigatórios na suíte padrão. É dependência de
+**desenvolvimento apenas** — não entra no runtime, não introduz build step e não afeta
+a regra de o cliente ser vanilla sem npm. Requer o passo único
+`playwright install chromium`, documentado no README.
+
 ## Explicitamente não usar
 
 Frameworks de frontend, bundlers, engines de jogo (Phaser/PixiJS/Three.js), frameworks

@@ -71,6 +71,27 @@ no navegador Chromium do celular.
   - Se a API de sensores estiver indisponível ou negada (contexto não seguro, permissão
     recusada), a interface exibe um aviso visível e explícito com a causa provável —
     nunca falha silenciosamente ("falhar alto no cliente").
+  - **Máquina de estados visuais.** O cliente tem exatamente quatro estados de tela:
+    `pareamento`, `conectando`, `conectado` e `desconectado`. Em qualquer instante
+    **exatamente uma** tela está visível. A alternância é responsabilidade do
+    JavaScript, e o CSS não pode contradizê-la: nenhuma regra de estilo pode manter
+    visível um elemento marcado como oculto pelo mecanismo de alternância.
+  - **Semântica de entrada por toque (contrato da interface).** Todo controle
+    acionável da interface do controle — botões de gamepad e comandos como calibrar —
+    responde a **eventos de toque**. É proibido depender do evento `click` para
+    qualquer ação: o tratamento multi-touch suprime a sintetização de `click` pelo
+    navegador, então um controle ligado apenas a `click` fica inerte no aparelho de
+    referência (podendo funcionar no desktop com mouse, o que mascara o defeito).
+    Suporte a `click` é permitido apenas como caminho adicional para mouse/desktop,
+    nunca como caminho único.
+  - **Nenhum elemento não-interativo intercepta toque.** Faixas de status, avisos,
+    rótulos, overlays de diagnóstico e qualquer elemento decorativo posicionado sobre
+    a área dos controles não podem receber o toque no lugar do controle sob eles.
+  - **Momento do modo imersivo.** O pedido de tela cheia é feito a partir de um gesto
+    do usuário já **concluído** (fim do toque), nunca durante um toque em andamento:
+    o navegador cancela a sequência de toque ao entrar em tela cheia, e um pedido
+    disparado no início do toque engole o acionamento do controle. A tentativa não se
+    repete a cada toque.
 - Critérios de aceite:
   1. A página carrega sem nenhuma requisição a domínio externo (offline da internet,
      apenas rede local) — verificável pela lista de requests do navegador.
@@ -80,20 +101,45 @@ no navegador Chromium do celular.
      mostra mensagem de erro visível em até 2 segundos, nomeando o problema.
   4. Não há etapa de build: os arquivos servidos são exatamente os versionados em
      `web/`.
+  5. Em cada um dos quatro estados, exatamente uma tela está visível: verificável em
+     navegador headless medindo a caixa de layout de cada tela (a oculta tem área
+     zero). Cobre o caso em que uma regra de CSS anula o mecanismo de alternância.
+  6. Acionar qualquer controle **apenas com eventos de toque** (sem `click`) produz a
+     ação correspondente: cada botão de gamepad envia sua mensagem `button` e o
+     comando de calibrar envia `calibrate`. Verificável em navegador headless com
+     emulação de toque, inspecionando as mensagens efetivamente enviadas ao socket.
+  7. Para cada controle acionável, o elemento que recebe o toque nas coordenadas do
+     seu centro é o próprio controle (ou um descendente dele) — nunca uma faixa,
+     aviso ou overlay. Verificável em navegador headless.
+  8. O pedido de tela cheia não ocorre durante um toque em andamento: uma sequência
+     completa de toque sobre um botão sempre produz a mensagem `button` do botão,
+     independentemente do estado de tela cheia.
+  9. Nenhuma ação da interface do controle depende exclusivamente do evento `click`
+     (verificável por inspeção estática dos registros de evento em `web/js/`).
 
 ### F3 — Pareamento por IP
 
-- Descrição: tela inicial do cliente onde o usuário informa IP (e porta, pré-preenchida
-  com o padrão) do PC. O último IP usado com sucesso é salvo em `localStorage` (único
-  uso permitido de `localStorage`) e pré-preenchido na próxima visita; um toque em
-  "Conectar" reconecta.
+- Descrição:
+  - **A página do controle é servida pelo próprio PC de destino**, portanto o endereço
+    do servidor já está na URL que o usuário abriu. O cliente deriva IP e porta da
+    origem da própria página e **conecta automaticamente** ao carregar, sem exigir
+    digitação. Pedir ao usuário que digite um endereço que a página já conhece é
+    fricção desnecessária e fonte de erro.
+  - A tela de pareamento manual permanece como caminho de exceção — para o caso de a
+    página ser aberta fora do servidor (arquivo local) ou de o usuário precisar apontar
+    para outro host. Nela, o último endereço usado com sucesso é salvo em
+    `localStorage` (único uso permitido de `localStorage`) e pré-preenchido.
 - Critérios de aceite:
-  1. Primeira visita: campo de IP vazio (ou com placeholder), porta com valor padrão.
-  2. Após uma conexão bem-sucedida, recarregar a página mostra o último IP
-     pré-preenchido; um único toque estabelece a conexão.
-  3. IP inválido/inalcançável resulta em mensagem de erro visível em até 5 segundos,
-     com opção de tentar de novo.
-  4. Nada além do último IP/porta é persistido em `localStorage`.
+  1. Abrir a URL servida pelo PC conecta sem nenhuma digitação: em até 5 segundos o
+     cliente está no estado `conectado` e o servidor registra a sessão.
+  2. O endereço usado na conexão automática é o da origem da página (mesmo host e
+     mesma porta da URL aberta).
+  3. Quando a conexão automática não é possível (página fora do servidor), a tela de
+     pareamento é exibida com o último endereço pré-preenchido, e um único toque
+     conecta.
+  4. Endereço inválido/inalcançável resulta em mensagem de erro visível em até 5
+     segundos, nomeando o endereço tentado, com opção de tentar de novo.
+  5. Nada além do último IP/porta é persistido em `localStorage`.
 
 ### F4 — Controle por inclinação ("modo Wii")
 
@@ -165,6 +211,12 @@ no navegador Chromium do celular.
     runtime pela plataforma; nenhum outro módulo importa a biblioteca do driver.
   - Se o driver não estiver instalado, o servidor falha na inicialização com mensagem
     clara e acionável (nome do driver, link de instalação) — não com traceback cru.
+  - **Contrato de integração com o driver.** A implementação concreta precisa
+    satisfazer as exigências da biblioteca do driver, incluindo as que ela valida em
+    tempo de execução — notadamente o **registro do callback de rumble**, cuja
+    assinatura é inspecionada pela biblioteca e pode ser rejeitada por detalhes que
+    nenhum dublê de teste reproduz. O dublê usado na suíte padrão não é evidência de
+    integração correta: a inicialização com o driver real é um critério próprio.
   - Fallback teclado/mouse (`gamepad/keyboard.py`) está previsto na interface, mas a
     implementação completa é **segunda onda**; no MVP basta o stub existir e a seleção
     de plataforma estar preparada para recebê-lo.
@@ -178,6 +230,10 @@ no navegador Chromium do celular.
      qualquer SO, sem driver e sem celular (ver tools/tooling.md).
   4. Busca estática por import da biblioteca do driver só encontra ocorrências dentro
      de `server/gamepad/` (implementações concretas).
+  5. Com o driver real instalado, `python server/main.py` conclui a inicialização e
+     passa a aceitar conexões — incluindo o registro do callback de rumble, que não
+     pode lançar exceção. Verificação com hardware real, com critério observável: o
+     terminal imprime as URLs e nenhuma exceção aparece.
 
 ### F8 — Feedback tátil (rumble) fim-a-fim
 
@@ -213,8 +269,17 @@ no navegador Chromium do celular.
   - Ao detectar desconexão do cliente, o servidor **zera imediatamente** todos os
     botões, eixos e gatilhos do gamepad virtual (reset atômico).
   - O cliente detecta a queda, mostra o estado ("desconectado") de forma visível e
-    oferece reconexão por um toque; ao reconectar, exige recalibração implícita
-    (novo `calibrate` ou reuso do fluxo de entrada).
+    **reconecta automaticamente**, repetindo a tentativa em intervalo curto enquanto
+    a tela do controle estiver aberta. A reconexão por toque permanece disponível,
+    mas não pode ser o único caminho: exigir ação do usuário para uma queda que ele
+    não tem como perceber deixa o controle inerte sem explicação.
+  - **Proibição de falha silenciosa.** Enviar input com a conexão fechada não pode ser
+    descartado sem sinal: o estado da conexão fica permanentemente visível na tela do
+    controle, e uma queda exibe o motivo (código de fechamento). O sintoma "a
+    interface responde ao toque mas nada chega ao PC" é considerado defeito, não
+    comportamento aceitável.
+  - Ao reconectar, exige recalibração implícita (novo `calibrate` ou reuso do fluxo de
+    entrada).
 - Critérios de aceite:
   1. Fechar o socket abruptamente com um eixo deslocado e um botão pressionado
      resulta em estado do gamepad completamente zerado em até 250 ms após a detecção.
@@ -222,6 +287,13 @@ no navegador Chromium do celular.
   3. A UI do celular muda para o estado "desconectado" visível e um toque reconecta
      (reusando o último IP).
   4. Reconectar restabelece input funcional sem reiniciar o servidor.
+  5. Derrubar a conexão com a tela do controle aberta faz o cliente reconectar
+     **sozinho**, sem toque, e voltar ao estado `conectado` em até 5 segundos após o
+     servidor voltar a aceitar conexões.
+  6. O estado da conexão está visível na tela do controle em 100% do tempo em que ela
+     está aberta; após uma queda, o motivo (código de fechamento) é exibido.
+  7. Acionar controles com a conexão fechada nunca é silencioso: a tela indica o
+     estado desconectado enquanto durar a queda.
 
 ### F10 — Jogo de demonstração: Duck Shooting
 
@@ -407,6 +479,8 @@ banco de testes. KPIs de hardware real são verificados manualmente com o overla
 | KPI-9 Robustez do protocolo | F1 | 0 crashes do servidor no corpus de mensagens malformadas | suíte automatizada tests/protocol.md |
 | KPI-10 Consumo de bateria do celular | F2 | medição registrada (%/hora) em sessão de 1 h; alvo informativo ≤ 20%/h | procedimento manual em tests/latency-and-kpis.md — métrica de acompanhamento, não bloqueia aceite |
 | KPI-11 Estabilidade de sessão | F1, F9 | sessão contínua de 30 min jogando sem queda de conexão e sem input travado (0 ocorrências) | procedimento manual C10 em tests/connection-lifecycle.md |
+| KPI-12 Controles efetivamente acionáveis | F2, F6 | 100% dos controles acionáveis (12 botões + calibrar) produzem sua mensagem quando acionados **apenas por toque** | testes automatizados W12–W14 em navegador headless (tests/client-controller.md) |
+| KPI-13 Produto jogável fim-a-fim | F2, F4, F5, F6, F10 | uma partida completa jogada só com o celular, sem nenhum controle inerte (0 ocorrências) | procedimento manual W20 em tests/client-controller.md — **critério de pronto: nenhuma entrega é declarada completa sem ele** |
 
 Sem KPI artificial: taxa de acerto no Duck Shooting é usada como **métrica comparativa
 entre versões** (regressão de qualidade de controle), não como meta absoluta — o

@@ -11,8 +11,25 @@
   roda a suíte JS e falha se ela falhar. Node.js é ferramenta de desenvolvimento
   apenas; nada de npm/pacotes — só o runner embutido. Assim um único `pytest -q`
   cobre servidor e jogo.
+- **Testes de integração em navegador headless: obrigatórios na execução padrão.**
+  Carregam a página real do controle servida pelo servidor real, emulam toque e
+  inspecionam as mensagens que saem pelo socket (casos W11–W19). Ferramenta:
+  Playwright para Python, dirigindo Chromium — mesma família do navegador do aparelho
+  de referência. Justificativa: a suíte anterior cobria lógica pura e servidor, e
+  passava com 52 testes enquanto o produto era inutilizável; **toda a faixa de
+  defeitos vivia na integração com o DOM**, que ficava sem teste algum.
+  Estes testes **não podem ser marcados como opcionais nem pulados em silêncio**: se o
+  navegador não estiver instalado, a suíte falha com instrução de instalação
+  (`playwright install chromium`, passo único documentado no README) — pular era
+  exatamente o modo de falha que deixou os defeitos passarem.
 - Testes que exigem hardware/driver real são marcados (`@pytest.mark.hardware`) e
-  **excluídos da execução padrão** (config no `pyproject.toml`/`pytest.ini`).
+  **excluídos da execução padrão** (config no `pyproject.toml`/`pytest.ini`). Cada um
+  precisa declarar um critério **observável** (o que o operador deve ver), e não apenas
+  os passos a executar — sem isso o procedimento não é capaz de reprovar nada.
+- **Teste marcado nunca conta como cobertura.** Um relatório de testes não pode
+  declarar `SUCCESS` apoiado em uma faixa inteira de comportamento cuja verificação foi
+  adiada para procedimento manual não executado; o veredito precisa dizer
+  explicitamente o que ficou por verificar.
 - O gamepad virtual é substituído por um fake da interface `server/gamepad/base.py`
   em toda a suíte padrão — roda em qualquer SO, sem driver e sem celular.
 
