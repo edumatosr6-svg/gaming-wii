@@ -29,3 +29,18 @@
   reconhece o controle sem configuração manual (prova da promessa central).
 - **E9 — Rumble do driver**: um jogo/ferramenta que emite rumble no controle faz o
   celular vibrar (fio completo da F8, complementa P12 e G16).
+- **E10 — Inicialização com o driver real (contrato de integração)**: com o ViGEmBus
+  de fato instalado, executar `python server/main.py`. *Observar:* o processo conclui
+  a inicialização, imprime as URLs de controle e de jogo e permanece no ar aceitando
+  conexões; **nenhuma exceção aparece no terminal**, em particular no registro do
+  callback de rumble (critérios F7.5, KPI-15, passo 3 de P1). *Por que é um caso
+  próprio:* a biblioteca do driver valida a assinatura do callback em tempo de
+  execução e pode rejeitá-la; o dublê da suíte padrão aceita qualquer assinatura, então
+  E1 passa enquanto o servidor real não sobe. Reprovar aqui bloqueia a entrega mesmo
+  com a suíte automatizada 100% verde.
+- **E11 — Estado real do gamepad lido pelo SO**: com o servidor no ar e o celular
+  conectado, ler o estado do gamepad virtual por uma ferramenta XInput. *Observar:*
+  pressionar A acende exatamente o bit do botão A e soltar volta o estado a zero;
+  inclinar o aparelho move os eixos do analógico direito; após `calibrate`, a mesma
+  inclinação passa a ler (0, 0) (F5.1, F7.1). *Fecha a leitura por instrumento do que
+  E7 verifica visualmente.*

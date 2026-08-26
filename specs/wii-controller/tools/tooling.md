@@ -51,6 +51,12 @@ Automatizadas como testes (rodam no `pytest -q`):
 3. Nenhum import cruzado entre `game/` e `web/`/servidor (G14).
 4. Constantes de tuning referenciadas somente via `config.py` (busca por números
    mágicos nos módulos de mapping/protocolo é revisão de código, não automatizada).
+5. Nenhum controle acionável de `web/js/` tem `click` como único caminho de
+   acionamento (W16, F2.9) — `click` só é aceito como caminho adicional ao lado de um
+   registro de evento de toque para a mesma ação.
+6. Nenhum elemento não-interativo posicionado sobre a área dos controles fica sem
+   neutralizar a captura de toque (W14, F2.7); a verificação por geometria real é o
+   W14 em navegador headless, esta é a checagem estática que a acompanha.
 
 ## Scripts utilitários
 

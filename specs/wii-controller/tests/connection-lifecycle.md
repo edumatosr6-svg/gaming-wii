@@ -34,9 +34,13 @@ marcado como **[manual/hardware]**.
 
 ## Manuais / hardware [manual/hardware]
 
-- **C8 — Estado visível no celular**: derrubar o Wi-Fi do celular durante o uso; a UI
-  mostra "desconectado" e um toque reconecta usando o último IP (critérios F9.3,
-  F3.2).
+- **C8 — Queda visível e reconexão automática**: derrubar o Wi-Fi do celular durante o
+  uso e restabelecê-lo em seguida. *Observar:* a tela passa a `desconectado` de forma
+  visível, exibindo o código de fechamento; enquanto durar a queda o estado permanece
+  na tela (a interface nunca aparenta funcionar sem estar conectada); ao voltar a rede,
+  o cliente **reconecta sozinho, sem nenhum toque**, e o input volta a funcionar
+  (critérios F9.3, F9.5, F9.6, F9.7). O toque em reconectar continua funcionando como
+  atalho, mas reprovar por exigir toque é o ponto do caso.
 - **C9 — Tempo de reconexão (KPI-5)**: com servidor já rodando e IP lembrado,
   cronometrar do desbloqueio do celular até input ativo no gamepad: < 15 s.
 - **C10 — Estabilidade de sessão (KPI-11)**: sessão contínua de 30 min jogando Duck

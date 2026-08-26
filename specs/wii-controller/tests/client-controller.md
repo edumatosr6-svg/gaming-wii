@@ -20,6 +20,10 @@ essa lógica e o DOM/navegador, faixa que antes não tinha nenhum teste.
 - **W2 — Transições de botão**: dado uma sequência touchstart/touchmove/touchend,
   então exatamente um `button down` e um `button up` são gerados por pressão
   (critério F6.4), inclusive quando o dedo desliza para fora do botão (F6.3).
+- **W2b — Posse do toque**: dado um toque iniciado sobre o botão A, quando o dedo
+  arrasta por cima do botão B e solta ali, então é gerado `a up` e **nenhum** `b down`
+  (F6.3). *Impede que o botão seja resolvido pelo elemento sob o dedo a cada
+  movimento, o que trocaria de botão no meio do arrasto.*
 - **W3 — Formato das mensagens**: as mensagens geradas pelo cliente validam contra o
   schema de `protocol.py` (mesmos campos e tipos da tabela em software-specs.md).
 

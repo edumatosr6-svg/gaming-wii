@@ -61,11 +61,13 @@ Página estática vanilla (HTML/CSS/JS ES2020, sem framework, sem build, sem CDN
 no navegador Chromium do celular.
 
 - Descrição:
-  - Em interação inicial do usuário (toque em "Conectar"/"Jogar"), a página entra em
-    tela cheia (Fullscreen API) e trava a orientação em paisagem (Screen Orientation
-    API); se o travamento por API falhar (restrição do navegador), a interface exibe
-    orientação visual para o usuário girar o aparelho e o layout funciona apenas em
-    paisagem.
+  - A página opera em tela cheia (Fullscreen API) e com a orientação travada em
+    paisagem (Screen Orientation API). O **momento** em que isso é solicitado é
+    definido em um único lugar — o bullet "Momento do modo imersivo", mais abaixo — e
+    não está atrelado a um toque em "Conectar", que o fluxo feliz não tem (a conexão é
+    automática, F3.1). Se o travamento por API falhar (restrição do navegador), a
+    interface exibe orientação visual para o usuário girar o aparelho e o layout
+    funciona apenas em paisagem.
   - Scroll, zoom por pinça, duplo-toque e seleção de texto são impedidos durante o uso
     (via CSS `touch-action`/`user-select` e handlers de evento com `preventDefault`).
   - Se a API de sensores estiver indisponível ou negada (contexto não seguro, permissão
@@ -191,13 +193,18 @@ no navegador Chromium do celular.
   vários botões simultaneamente enquanto o aparelho inclina. Cada botão muda de
   aparência (estado visual "pressionado") no mesmo frame do toque. Cada transição
   gera uma mensagem `button` (pressionar e soltar), sem repetição enquanto segurado.
+  **Posse do toque:** cada toque pertence ao controle sobre o qual ele *começou*, e
+  essa posse não muda enquanto o toque durar. Arrastar o dedo para fora solta aquele
+  controle (gera `up`) e **não** pressiona nenhum outro: um toque em andamento nunca é
+  reatribuído ao elemento que estiver sob o dedo no momento.
 - Critérios de aceite:
   1. Segurar L + pressionar A + inclinar simultaneamente resulta nos três inputs
      ativos ao mesmo tempo no estado do gamepad virtual.
   2. Cada botão da lista (A, B, X, Y, cima, baixo, esquerda, direita, LB, RB, START,
      BACK) gera evento `down` no toque e `up` ao soltar, com feedback visual imediato.
   3. Arrastar o dedo para fora de um botão sem soltar gera `up` (nenhum botão fica
-     "preso" ao perder o toque).
+     "preso" ao perder o toque) e não gera `down` em nenhum outro botão, mesmo que o
+     dedo passe por cima dele — a posse do toque é do botão de origem.
   4. Nenhuma mensagem `button` repetida é enviada enquanto o botão permanece segurado.
 
 ### F7 — Emulação de gamepad virtual no PC
@@ -395,24 +402,59 @@ simples é opcional e não exigido no MVP).
 1. Carregar `config.py` e argumentos de linha de comando (porta).
 2. Selecionar implementação de gamepad pela plataforma; se o driver estiver ausente,
    abortar com mensagem acionável (F7.2).
-3. Gerar/carregar certificado autoassinado.
-4. Subir HTTP(S) estático + WebSocket na mesma porta; imprimir URLs (F1.1).
+3. **Inicializar o gamepad virtual por completo, incluindo o registro do callback de
+   rumble** (F7 — contrato de integração com o driver). Esta etapa é executada *antes*
+   de o servidor se declarar pronto: qualquer rejeição da biblioteca do driver aborta a
+   inicialização com mensagem acionável, em vez de aparecer depois como servidor que
+   não sobe. O dublê de teste não é evidência de que este passo funciona (F7.5).
+4. Gerar/carregar certificado autoassinado.
+5. Subir HTTP(S) estático + WebSocket na mesma porta; imprimir URLs (F1.1).
 
 ### P2 — Sessão do controle (fluxo feliz)
-1. Usuário abre a URL no celular, aceita o certificado (primeira vez), informa/confirma
-   o IP e toca em Conectar.
-2. Cliente abre `wss://…/ws`; servidor responde `hello`; cliente entra em fullscreen +
-   paisagem e pede permissão de sensores.
-3. Cliente envia `motion` a ~60 Hz e `button` por transição; servidor aplica
-   `mapping.py` e atualiza o gamepad virtual a cada mensagem.
-4. Usuário calibra quando quiser (`calibrate`).
-5. Jogo (qualquer um) lê o gamepad; rumble volta pelo caminho da F8.
+1. Usuário abre a URL servida pelo PC no celular e aceita o certificado (primeira vez).
+   No fluxo feliz o cliente entra direto no estado **`conectando`** (tela de conexão
+   visível, tela de pareamento oculta — F2.5 e tabela de transições de
+   `ClientViewState`), pois o endereço da origem da própria página já é utilizável e o
+   cliente conecta automaticamente (F3.1). Não há digitação de IP nem toque em
+   "Conectar" no fluxo feliz. O estado inicial só é `pareamento` no caminho de exceção
+   da F3.3 (página aberta fora do servidor, sem origem utilizável).
+2. Cliente passa ao estado `conectando`, abre `wss://…/ws`; servidor responde `hello`;
+   cliente passa ao estado `conectado` (e apenas essa tela fica visível — F2.5) e pede
+   permissão de sensores.
+3. No **fim** do primeiro toque do usuário sobre a interface já conectada (evento de
+   término do toque, uma única vez na sessão), o cliente pede tela cheia e trava a
+   orientação em paisagem (F2 — momento do modo imersivo). Nunca durante um toque em
+   andamento, porque o navegador cancela a sequência e engole o acionamento.
+4. Cliente envia `motion` a ~60 Hz e `button` por transição; servidor aplica
+   `mapping.py` e atualiza o gamepad virtual a cada mensagem. Todo acionamento vem de
+   eventos de toque; nenhuma ação depende de `click` (F2.6, F2.9).
+5. Usuário calibra quando quiser tocando no comando de calibrar (`calibrate`).
+6. Jogo (qualquer um) lê o gamepad; rumble volta pelo caminho da F8.
 
 ### P3 — Queda e reconexão
 1. Ping/pong expira ou socket fecha → servidor zera o gamepad (F9.1) e marca a sessão
    como encerrada.
-2. Cliente exibe "desconectado" e botão de reconectar; um toque refaz P2 a partir do
-   passo 2, reusando o último IP.
+2. Cliente detecta a queda, passa ao estado `desconectado` (tela visível, exibindo o
+   código de fechamento — F9.6) e **inicia reconexão automática**, repetindo a tentativa
+   em intervalo curto enquanto a tela do controle estiver aberta (F9.5). Nenhum input é
+   descartado em silêncio nesse intervalo: o estado desconectado fica visível enquanto
+   durar a queda (F9.7).
+3. Quando o servidor volta a aceitar conexões, a reconexão sucede sem ação do usuário e
+   o cliente retorna ao estado `conectado`, retomando P2 a partir do passo 4. A
+   reconexão por toque continua disponível como atalho, nunca como caminho único.
+4. Após reconectar, a calibração da sessão anterior não é reaproveitada: vale o zero
+   padrão até que o usuário calibre de novo (F9 — recalibração implícita).
+
+### P5 — Transição de estado visual do cliente
+Executada pelo cliente a cada mudança de situação da conexão (ver `ClientViewState` em
+Data Models). Entrada: estado atual + evento. Saída: exatamente uma tela visível.
+1. Determinar o novo estado a partir do evento (carregar página, socket aberto, `hello`
+   recebido, socket fechado, tentativa de reconexão em curso).
+2. Ocultar todas as telas pelo mecanismo único de alternância e revelar apenas a do
+   novo estado. Nenhuma regra de estilo pode manter visível uma tela ocultada por esse
+   mecanismo (F2.5) — a alternância é a única autoridade sobre visibilidade de tela.
+3. Atualizar o indicador permanente de estado da conexão, que é visível em todos os
+   quatro estados (F9.6), incluindo o motivo/código quando houver queda.
 
 ### P4 — Partida de Duck Shooting
 1. PC abre a URL do jogo; jogo detecta o gamepad virtual via Gamepad API (se ausente,
@@ -446,6 +488,49 @@ alternativa prevista (mesmos campos, layout fixo) — decisão adiada até haver
   `last_motion: (b, g, t)`, `button_state: dict[str, bool]`, `connected: bool`,
   `latency_window: deque[float]`.
 - Invariante: `connected == False` ⇒ gamepad virtual zerado (F9).
+
+### ClientViewState (cliente — máquina de estados visuais, F2/F9)
+
+Estado explícito no JS do controle; a tela exibida é função dele e de mais nada.
+
+- Estados: `pareamento`, `conectando`, `conectado`, `desconectado`.
+- Campos: `state: enum(acima)`, `endpoint: str` (origem da página ou endereço manual),
+  `lastCloseCode: int | null`, `lastCloseReason: str | null`,
+  `reconnectAttempts: int`.
+- Transições:
+
+| de | evento | para |
+|---|---|---|
+| (carga da página) | origem utilizável | `conectando` |
+| (carga da página) | sem origem utilizável (arquivo local) | `pareamento` |
+| `pareamento` | toque em conectar com endereço válido | `conectando` |
+| `conectando` | `hello` recebido | `conectado` |
+| `conectando` | erro/timeout de abertura | `desconectado` |
+| `conectado` | socket fechado ou timeout de ping/pong | `desconectado` |
+| `desconectado` | tentativa automática de reconexão iniciada | `conectando` |
+| `desconectado` | toque em reconectar | `conectando` |
+
+- Invariantes:
+  1. **Exatamente uma** tela visível por estado (F2.5) — nunca zero, nunca duas.
+  2. O indicador de estado da conexão é visível nos quatro estados (F9.6).
+  3. `state != conectado` ⇒ nenhum input é enviado, **e** a tela indica isso; enviar com
+     socket fechado nunca é descartado em silêncio (F9.7).
+  4. Em `desconectado` por queda, `lastCloseCode` está preenchido e é exibido.
+  5. `reconnectAttempts` é zerado ao atingir `conectado`.
+
+### Contrato do gamepad virtual (`server/gamepad/base.py`, F7)
+
+Interface abstrata; a implementação concreta é escolhida em runtime pela plataforma.
+
+- Operações: `set_button(id, down)`, `set_axis(axis, value ∈ [-1.0, 1.0])`,
+  `set_trigger(trigger, value ∈ [0.0, 1.0])`, `register_rumble_callback(cb)`,
+  `reset()`.
+- `cb` recebe intensidade dos dois motores XInput (low/high) e a repassa ao caminho da
+  F8. **A biblioteca do driver pode inspecionar e rejeitar a assinatura do callback em
+  tempo de execução**; satisfazer essa validação faz parte do contrato da implementação
+  concreta, e não é reproduzível pelo dublê usado na suíte padrão.
+- Invariantes: `register_rumble_callback` ocorre durante P1 e não pode lançar exceção
+  com o driver real (F7.5); após `reset()`, todos os botões, eixos e gatilhos leem zero.
 
 ### Config (constantes em `config.py`)
 `PORT`, `DEAD_ZONE_DEG`, `SENSITIVITY`, `MAX_ANGLE_DEG`, `SMOOTHING_ALPHA`,
@@ -481,6 +566,8 @@ banco de testes. KPIs de hardware real são verificados manualmente com o overla
 | KPI-11 Estabilidade de sessão | F1, F9 | sessão contínua de 30 min jogando sem queda de conexão e sem input travado (0 ocorrências) | procedimento manual C10 em tests/connection-lifecycle.md |
 | KPI-12 Controles efetivamente acionáveis | F2, F6 | 100% dos controles acionáveis (12 botões + calibrar) produzem sua mensagem quando acionados **apenas por toque** | testes automatizados W12–W14 em navegador headless (tests/client-controller.md) |
 | KPI-13 Produto jogável fim-a-fim | F2, F4, F5, F6, F10 | uma partida completa jogada só com o celular, sem nenhum controle inerte (0 ocorrências) | procedimento manual W20 em tests/client-controller.md — **critério de pronto: nenhuma entrega é declarada completa sem ele** |
+| KPI-14 Ausência de falha silenciosa | F2, F9 | 0 intervalos em que a interface aceita toque sem que o estado real da conexão esteja visível na tela; estado visível em 100% do tempo, com código de fechamento após queda | testes automatizados W11 e W19 em navegador headless (tests/client-controller.md) |
+| KPI-15 Inicialização com o driver real | F7 | `python server/main.py` sobe e aceita conexões com o ViGEmBus instalado, incluindo registro do callback de rumble, em 100% das tentativas (0 exceções) | procedimento manual E10 em tests/gamepad-emulation.md — o dublê da suíte padrão não substitui esta verificação |
 
 Sem KPI artificial: taxa de acerto no Duck Shooting é usada como **métrica comparativa
 entre versões** (regressão de qualidade de controle), não como meta absoluta — o
