@@ -81,6 +81,35 @@ export function createButtonTracker() {
   };
 }
 
+// Janela em que um `click` é considerado sintetizado a partir do toque que
+// acabou de ser tratado (o "ghost click" do Chromium Android).
+const GHOST_CLICK_WINDOW_MS = 700;
+
+// Registro padrão de um comando acionável da interface (calibrar, conectar,
+// reconectar). O toque é o caminho PRIMÁRIO: o pipeline multi-touch chama
+// preventDefault na área dos controles, o que suprime a sintetização de
+// `click` — um comando ligado só a `click` funciona com mouse no desktop e é
+// inerte no aparelho de referência (F2.9). `click` fica como caminho
+// ADICIONAL para mouse/teclado, com guarda contra disparo duplo.
+export function onActivate(element, handler, nowFn = () => Date.now()) {
+  let lastTouchMs = Number.NEGATIVE_INFINITY;
+  element.addEventListener(
+    'touchstart',
+    (event) => {
+      event.preventDefault();
+      lastTouchMs = nowFn();
+      handler(event);
+    },
+    { passive: false }
+  );
+  element.addEventListener('click', (event) => {
+    if (nowFn() - lastTouchMs < GHOST_CLICK_WINDOW_MS) {
+      return; // já tratado pelo toque
+    }
+    handler(event);
+  });
+}
+
 // Liga o tracker aos eventos de toque reais (só no navegador).
 export function wireTouchButtons(container, sendFn) {
   const tracker = createButtonTracker();

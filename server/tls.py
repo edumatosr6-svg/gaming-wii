@@ -61,7 +61,7 @@ def ensure_certificate() -> tuple[Path, Path]:
     for ip in {*get_local_ips(), "127.0.0.1"}:
         san_entries.append(x509.IPAddress(ipaddress.ip_address(ip)))
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)

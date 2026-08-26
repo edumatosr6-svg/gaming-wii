@@ -53,7 +53,15 @@ defeito que chegou ao usuário final e que nenhuma outra faixa de teste detectar
 - **W15 — Tela cheia não engole o acionamento**: dado que o cliente pede modo imersivo,
   quando uma sequência de toque completa ocorre sobre um botão, então a mensagem
   `button` é enviada de qualquer forma (F2.8). *Pedir tela cheia no início do toque
-  faz o navegador cancelar a sequência e o botão nunca dispara.*
+  faz o navegador cancelar a sequência e o botão nunca dispara.* **Onde observar:** o
+  cancelamento do toque ao entrar em tela cheia é comportamento do Chromium no
+  aparelho, e **não se reproduz no Chromium headless** — medir só a mensagem enviada
+  faz o caso passar tanto com a implementação correta quanto com a defeituosa. Por
+  isso o caso tem duas metades, e ambas são obrigatórias: (a) a mensagem `button`
+  sai numa sequência de toque completa, e (b) o pedido de tela cheia está registrado
+  num evento que **conclui** o gesto (`touchend`), nunca em `touchstart`/`pointerdown`/
+  `mousedown` — que é a redação normativa de F2.8 e o que efetivamente reprova a
+  implementação errada.
 - **W16 — Nenhuma ação depende de `click`**: inspeção estática dos registros de evento
   em `web/js/`: nenhum controle acionável tem `click` como único caminho (F2.9).
 - **W17 — Conexão automática pela origem**: dado a página aberta na URL servida pelo
@@ -65,7 +73,24 @@ defeito que chegou ao usuário final e que nenhuma outra faixa de teste detectar
 - **W19 — Estado da conexão sempre visível**: dado a tela do controle aberta, então o
   estado da conexão está visível em todos os momentos; após uma queda, o motivo
   (código de fechamento) é exibido (F9.6, F9.7). *Cobre a falha silenciosa: a interface
-  respondia ao toque enquanto nada saía do aparelho.*
+  respondia ao toque enquanto nada saía do aparelho.* **Onde observar:** o motivo
+  precisa continuar legível depois que o cliente entra em nova tentativa de conexão —
+  a tela de queda é substituída pela de `conectando` em menos de 1 s, então verificar
+  apenas o elemento dessa tela mede uma janela curta demais para ser confiável. O
+  critério é o motivo estar visível em algum elemento **persistente**, fora da
+  máquina de estados de telas.
+
+- **W21 — Faixas visíveis não se cobrem**: dado quaisquer duas faixas persistentes
+  (status, erro, dica de rotação, diagnóstico) visíveis ao mesmo tempo, quando se
+  medem suas caixas de layout, então elas não se intersectam (F2.2, F2.3, F9.6).
+  *Cobre a classe de defeito "CSS anula um mecanismo de JS que está correto": faixas
+  ancoradas individualmente na mesma borda se cobrem conforme a ordem do documento, e
+  foi assim que o aviso de erro dos sensores ficou mudo por baixo da faixa de status e
+  a dica de rotação ficou ilegível sob a linha de diagnóstico. Nenhuma outra faixa de
+  teste detecta isso: a lógica pura não conhece layout, e W11/W14 medem as telas e a
+  captura de toque, não a legibilidade de faixas sobrepostas. O teste força o cenário
+  adverso — todas as faixas visíveis simultaneamente — porque o estado normal tem uma
+  faixa por borda e esconde o defeito.*
 
 ## Manuais no aparelho de referência [manual/hardware]
 

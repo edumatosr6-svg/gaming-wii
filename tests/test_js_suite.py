@@ -125,3 +125,27 @@ def test_w10_calibracao_manual():
 @hardware
 def test_g15_a_g19_duck_shooting_manuais():
     pytest.skip("Procedimentos manuais G15–G19: fluxo de entrada, rumble, áudio, FPS")
+
+
+@hardware
+def test_w20_sessao_jogavel_fim_a_fim_manual():
+    """W20 / KPI-13 — critério de "o produto funciona". Sem caminho automatizável.
+
+    Observar: com o servidor no ar e o Duck Shooting aberto no PC, jogar uma
+    rodada completa usando apenas o celular — a mira acompanha a inclinação, o
+    botão A dispara, a calibração recentraliza e nenhum controle fica inerte
+    durante a partida.
+    """
+    pytest.skip("Procedimento manual W20 (KPI-13): partida completa só com o celular")
+
+
+@hardware
+def test_e10_inicializacao_com_driver_real_manual():
+    """E10 / KPI-15 — o dublê da suíte padrão não é evidência de integração.
+
+    Observar: com o ViGEmBus instalado, `python server/main.py` conclui a
+    inicialização, o terminal imprime as URLs e nenhuma exceção aparece —
+    incluindo o registro do callback de rumble, cuja assinatura a biblioteca
+    inspeciona em tempo de execução.
+    """
+    pytest.skip("Procedimento manual E10 (KPI-15): subir o servidor com o driver real")

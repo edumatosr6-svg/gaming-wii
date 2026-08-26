@@ -7,7 +7,9 @@
 }
 
 /* O JS alterna telas pelo atributo hidden; sem isto, os display:flex das
-   seções sobrepõem o display:none do atributo e a troca de tela não ocorre. */
+   seções sobrepõem o display:none do atributo e a troca de tela não ocorre.
+   Esta regra é o contrato da máquina de estados visuais (F2.5): nenhuma outra
+   regra deste arquivo pode tornar visível um elemento marcado como oculto. */
 [hidden] {
   display: none !important;
 }
@@ -26,14 +28,37 @@ body {
   touch-action: none;
 }
 
-#pair-screen {
+#screens {
+  height: 100%;
+}
+
+/* As quatro telas da máquina de estados (F2.5). A tela visível ocupa a altura
+   toda; a oculta não gera caixa de layout alguma (regra [hidden] acima). */
+.screen {
+  height: 100%;
+}
+
+#pair-screen,
+#connecting-screen,
+#disconnected-screen {
   touch-action: auto;
   padding: 2rem;
   max-width: 26rem;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 0.8rem;
+}
+
+.muted {
+  color: #9aa1ad;
+  font-size: 0.9rem;
+}
+
+#close-reason {
+  font-family: ui-monospace, monospace;
+  color: #ffb4ab;
 }
 
 #pair-screen input {
@@ -46,23 +71,59 @@ body {
   color: #e8e8e8;
 }
 
-#connect-button {
+#connect-button,
+#reconnect-button,
+#pair-manually-button {
   padding: 0.9rem;
   font-size: 1.2rem;
   border: none;
   border-radius: 8px;
   background: #2f81f7;
   color: white;
+  /* Estes controles são acionados por toque (F2.6); `touch-action: none` evita
+     que o navegador trate o toque como gesto de rolagem antes de entregá-lo. */
+  touch-action: none;
 }
 
-.banner {
+#pair-manually-button.secondary {
+  background: #3a3f49;
+  font-size: 1rem;
+}
+
+/* Pilhas de faixas: UM ponto de ancoragem por borda, com as faixas empilhadas
+   em fluxo normal dentro dele. É o que impede uma faixa de cobrir a outra —
+   ancorar cada faixa com `position: fixed` no mesmo ponto faz com que a última
+   na ordem do documento pinte por cima das anteriores, e foi assim que o aviso
+   de erro (F2.3) ficou invisível sob a faixa de status e a dica de rotação
+   (F2.2) ficou ilegível sob a linha de diagnóstico. Uma faixa nova acrescentada
+   a uma destas pilhas não pode esconder as que já existem. */
+.banner-stack {
   position: fixed;
   left: 0;
   right: 0;
   z-index: 10;
-  /* As faixas cobrem a fileira de ombro (L/R) e o rodapé do pad; sem isto elas
-     recebem o toque no lugar do botão. A reconexão é automática, então nenhuma
-     delas precisa ser clicável. */
+  display: flex;
+  flex-direction: column;
+  /* F2.7 / W14: as pilhas cobrem a fileira de ombro (L/R) e o rodapé do pad.
+     Sem isto elas recebem o toque no lugar do botão sob elas — foi assim que a
+     interface passou a "responder" sem nada sair pelo socket. Nenhuma faixa é
+     acionável: toda ação de reconexão mora num controle real da tela
+     `desconectado`. Esta declaração NÃO pode ser removida sem mover as faixas
+     para fora da área dos controles. */
+  pointer-events: none;
+}
+
+.banner-stack.top {
+  top: 0;
+}
+
+.banner-stack.bottom {
+  bottom: 0;
+}
+
+.banner {
+  /* Defesa em profundidade: a pilha já neutraliza a captura de toque, mas uma
+     faixa usada fora dela continua sem interceptar o controle sob ela. */
   pointer-events: none;
   padding: 0.5rem 1rem;
   text-align: center;
@@ -70,28 +131,32 @@ body {
 }
 
 .banner.error {
-  top: 0;
   background: #b3261e;
   color: white;
 }
 
 .banner.hint {
-  bottom: 0;
   background: #7a5c00;
   color: white;
 }
 
 .banner.status {
-  top: 0;
   background: #2b3d2f;
 }
 
-.banner.status.disconnected {
+.banner.status[data-state='conectando'] {
+  background: #4a4300;
+}
+
+.banner.status[data-state='pareamento'] {
+  background: #2a2e36;
+}
+
+.banner.status[data-state='desconectado'] {
   background: #b3261e;
 }
 
 .banner.debug {
-  bottom: 0;
   background: #101216;
   color: #8fb0d0;
   font-family: ui-monospace, monospace;
@@ -110,7 +175,13 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 2.2rem 1rem 1rem;
+  /* Recuos superior/inferior reservam espaço para as pilhas de faixas (status
+     no topo, diagnóstico no rodapé), para que elas não fiquem por cima dos
+     controles (F2.7). Dimensionados para a altura normal de uma faixa por
+     pilha; quando uma faixa excepcional aparece (erro, dica de rotação) a pilha
+     cresce e passa a se sobrepor à fileira de ombro — o que continua sem
+     bloquear o toque, porque a captura está neutralizada na pilha. */
+  padding: 2.8rem 1rem 1.6rem;
 }
 
 .shoulder-row {

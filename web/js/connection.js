@@ -2,9 +2,25 @@
 
 const STORAGE_KEY = 'wii-controller.last-address'; // único uso de localStorage
 
-// Monta a URL do WebSocket a partir de IP e porta.
-export function wsUrl(ip, port) {
-  return `wss://${ip}:${port}/ws`;
+// Monta a URL do WebSocket a partir de IP e porta. O padrão é seguro (`wss`),
+// que é o modo em que o servidor roda (HTTPS é exigido pelos sensores, F1).
+export function wsUrl(ip, port, secure = true) {
+  return `${secure ? 'wss' : 'ws'}://${ip}:${port}/ws`;
+}
+
+// Deriva o endereço do servidor da origem da própria página (F3.1/F3.2): a
+// página do controle é servida pelo PC de destino, então o endereço já está na
+// URL aberta — pedir que o usuário digite o que a página já sabe é fricção e
+// fonte de erro. Devolve null quando não há origem utilizável (`file://`),
+// caso em que o pareamento manual é o caminho. Puro, testável sem navegador.
+export function addressFromLocation(location, defaultPort) {
+  const hostname = location && location.hostname ? location.hostname : '';
+  if (hostname === '') {
+    return null;
+  }
+  const secure = location.protocol === 'https:';
+  const port = location.port !== '' ? location.port : String(defaultPort);
+  return { ip: hostname, port, secure };
 }
 
 // Lê/salva o último endereço usado com sucesso (somente IP/porta — F3.4).
@@ -36,6 +52,11 @@ export function saveLastAddress(ip, port) {
 export function createConnection(callbacks) {
   let socket = null;
   let sessionId = null;
+  // Geração da tentativa corrente. A reconexão automática (F9.5) abre sockets
+  // novos enquanto os antigos ainda estão fechando; sem esta guarda, os eventos
+  // do socket obsoleto derrubam o estado da tentativa nova e a reconexão entra
+  // em laço.
+  let generation = 0;
 
   function send(messageObject) {
     if (socket !== null && socket.readyState === WebSocket.OPEN) {
@@ -43,33 +64,46 @@ export function createConnection(callbacks) {
     }
   }
 
-  function connect(ip, port, timeoutMs = 5000) {
+  function connect(ip, port, { secure = true, timeoutMs = 5000 } = {}) {
     disconnect();
-    const url = wsUrl(ip, port);
+    generation += 1;
+    const myGeneration = generation;
+    const isCurrent = () => myGeneration === generation;
+    const url = wsUrl(ip, port, secure);
     socket = new WebSocket(url);
+    const mySocket = socket;
     const timeout = setTimeout(() => {
-      if (socket !== null && socket.readyState !== WebSocket.OPEN) {
-        socket.close();
+      if (isCurrent() && mySocket.readyState !== WebSocket.OPEN) {
+        mySocket.close();
         callbacks.onError(
           `Não foi possível conectar a ${ip}:${port} em ${timeoutMs / 1000}s. Confira o IP e a rede.`
         );
       }
     }, timeoutMs);
 
-    socket.addEventListener('open', () => {
+    mySocket.addEventListener('open', () => {
       clearTimeout(timeout);
+      if (!isCurrent()) {
+        return;
+      }
       saveLastAddress(ip, port);
       callbacks.onOpen();
     });
-    socket.addEventListener('close', (event) => {
+    mySocket.addEventListener('close', (event) => {
       clearTimeout(timeout);
+      if (!isCurrent()) {
+        return;
+      }
       callbacks.onClose(event.code, event.reason);
     });
-    socket.addEventListener('error', () => {
+    mySocket.addEventListener('error', () => {
       clearTimeout(timeout);
+      if (!isCurrent()) {
+        return;
+      }
       callbacks.onError(`Falha na conexão com ${ip}:${port}.`);
     });
-    socket.addEventListener('message', (event) => {
+    mySocket.addEventListener('message', (event) => {
       let data;
       try {
         data = JSON.parse(event.data);

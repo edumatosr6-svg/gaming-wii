@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from server import config
@@ -28,7 +26,7 @@ def test_m2_zona_morta():
 def test_m3_monotonicidade():
     angles = [DZ + i * (MAX - DZ) / 40 for i in range(1, 41)]
     outputs = [tilt_to_axes(a, 0.0)[1] for a in angles]
-    for previous, current in zip(outputs, outputs[1:]):
+    for previous, current in zip(outputs, outputs[1:], strict=False):
         assert current > previous
 
 

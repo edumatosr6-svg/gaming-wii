@@ -10,56 +10,103 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
-    <div id="error-banner" class="banner error" hidden></div>
-    <div id="rotate-hint" class="banner hint" hidden>Gire o aparelho para paisagem</div>
+    <!--
+      Faixas persistentes: vivem FORA das telas porque o estado da conexão precisa
+      estar visível em 100% do tempo em que a tela do controle está aberta (F9.6).
+      Todas são decorativas e não recebem toque (F2.7) — ver `pointer-events` em
+      `.banner-stack`; qualquer ação de reconexão mora num controle real dentro da
+      tela `desconectado`.
 
-    <section id="pair-screen">
-      <h1>wii-controller</h1>
-      <p>Informe o IP do PC (mostrado no terminal do servidor):</p>
-      <label>
-        IP
-        <input id="ip-input" type="text" inputmode="decimal" placeholder="192.168.0.10" />
-      </label>
-      <label>
-        Porta
-        <input id="port-input" type="text" inputmode="numeric" />
-      </label>
-      <button id="connect-button" type="button">Conectar</button>
-    </section>
+      As faixas ficam EMPILHADAS EM FLUXO dentro de dois contêineres (topo e
+      rodapé), e não ancoradas individualmente com `position: fixed`. Quatro
+      faixas fixas no mesmo ponto se cobrem entre si conforme a ordem do
+      documento — foi assim que o aviso de erro ficou mudo por baixo da faixa de
+      status. Com o empilhamento em fluxo, acrescentar uma faixa nova nunca
+      esconde as existentes. Dentro de cada pilha, a ordem é por urgência.
+    -->
+    <div id="top-banners" class="banner-stack top">
+      <div id="error-banner" class="banner error" hidden></div>
+      <div id="status-banner" class="banner status" data-state="conectando">conectando…</div>
+    </div>
 
-    <section id="pad-screen" hidden>
-      <div id="status-banner" class="banner status">conectando…</div>
+    <div id="bottom-banners" class="banner-stack bottom">
+      <div id="rotate-hint" class="banner hint" hidden>Gire o aparelho para paisagem</div>
       <div id="debug-line" class="banner debug"></div>
-      <div id="buttons-area">
-        <div class="shoulder-row">
-          <button class="pad-button shoulder" data-button="lb" type="button">L</button>
-          <button class="pad-button shoulder" data-button="rb" type="button">R</button>
-        </div>
-        <div class="main-row">
-          <div class="dpad">
-            <button class="pad-button" data-button="up" type="button">▲</button>
-            <div class="dpad-middle">
-              <button class="pad-button" data-button="left" type="button">◀</button>
-              <button class="pad-button" data-button="right" type="button">▶</button>
+    </div>
+
+    <!--
+      Máquina de estados visuais (F2.5): exatamente quatro telas, exatamente uma
+      visível em qualquer instante. `data-screen` é o contrato lido tanto pelo
+      alternador em main.js quanto pelo teste de integração W11 — nenhuma outra
+      seção deve carregar esse atributo.
+    -->
+    <main id="screens">
+      <section id="pair-screen" class="screen" data-screen="pareamento" hidden>
+        <h1>wii-controller</h1>
+        <p>Informe o IP do PC (mostrado no terminal do servidor):</p>
+        <label>
+          IP
+          <input id="ip-input" type="text" inputmode="decimal" placeholder="192.168.0.10" />
+        </label>
+        <label>
+          Porta
+          <input id="port-input" type="text" inputmode="numeric" />
+        </label>
+        <button id="connect-button" type="button">Conectar</button>
+      </section>
+
+      <section id="connecting-screen" class="screen" data-screen="conectando" hidden>
+        <h1>Conectando…</h1>
+        <p id="connecting-address">—</p>
+        <p class="muted">O endereço vem da própria URL desta página.</p>
+      </section>
+
+      <section id="pad-screen" class="screen" data-screen="conectado" hidden>
+        <div id="buttons-area">
+          <div class="shoulder-row">
+            <button class="pad-button shoulder" data-button="lb" type="button">L</button>
+            <button class="pad-button shoulder" data-button="rb" type="button">R</button>
+          </div>
+          <div class="main-row">
+            <div class="dpad">
+              <button class="pad-button" data-button="up" type="button">▲</button>
+              <div class="dpad-middle">
+                <button class="pad-button" data-button="left" type="button">◀</button>
+                <button class="pad-button" data-button="right" type="button">▶</button>
+              </div>
+              <button class="pad-button" data-button="down" type="button">▼</button>
             </div>
-            <button class="pad-button" data-button="down" type="button">▼</button>
-          </div>
-          <div class="center-column">
-            <button class="pad-button small" data-button="back" type="button">BACK</button>
-            <button id="calibrate-button" class="pad-button small calibrate" type="button">
-              CALIBRAR
-            </button>
-            <button class="pad-button small" data-button="start" type="button">START</button>
-          </div>
-          <div class="face-buttons">
-            <button class="pad-button face y" data-button="y" type="button">Y</button>
-            <button class="pad-button face x" data-button="x" type="button">X</button>
-            <button class="pad-button face b" data-button="b" type="button">B</button>
-            <button class="pad-button face a" data-button="a" type="button">A</button>
+            <div class="center-column">
+              <button class="pad-button small" data-button="back" type="button">BACK</button>
+              <button id="calibrate-button" class="pad-button small calibrate" type="button">
+                CALIBRAR
+              </button>
+              <button class="pad-button small" data-button="start" type="button">START</button>
+            </div>
+            <div class="face-buttons">
+              <button class="pad-button face y" data-button="y" type="button">Y</button>
+              <button class="pad-button face x" data-button="x" type="button">X</button>
+              <button class="pad-button face b" data-button="b" type="button">B</button>
+              <button class="pad-button face a" data-button="a" type="button">A</button>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section id="disconnected-screen" class="screen" data-screen="desconectado" hidden>
+        <h1>Desconectado</h1>
+        <!--
+          Motivo da queda (F9.7): sem isto o sintoma é "a interface responde ao
+          toque mas nada chega ao PC", que a spec trata como defeito.
+        -->
+        <p id="close-reason">—</p>
+        <p class="muted">Reconectando sozinho…</p>
+        <button id="reconnect-button" type="button">Tentar agora</button>
+        <button id="pair-manually-button" type="button" class="secondary">
+          Informar outro endereço
+        </button>
+      </section>
+    </main>
 
     <script type="module" src="js/main.js"></script>
   </body>

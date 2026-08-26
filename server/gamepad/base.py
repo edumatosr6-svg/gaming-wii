@@ -7,7 +7,7 @@ driver — todo o resto do servidor fala apenas com esta interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable
+from collections.abc import Callable
 
 # Callback de rumble: (motor_baixa_frequencia, motor_alta_frequencia) em [0, 1]
 RumbleCallback = Callable[[float, float], None]

@@ -8,3 +8,6 @@ pytest>=8.0
 pytest-asyncio>=0.23
 ruff>=0.4
 black>=24.0
+# Testes de integração em navegador headless (W11–W19), obrigatórios na suíte
+# padrão. Depois do pip install, rode o passo único: playwright install chromium
+playwright>=1.44

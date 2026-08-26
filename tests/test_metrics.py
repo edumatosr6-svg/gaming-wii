@@ -31,7 +31,14 @@ async def test_l1_get_metrics(live_server):
             return json.loads(response.read())
 
     data = await asyncio.to_thread(fetch)
-    for key in ("latency_ms_p50", "latency_ms_p95", "motion_rate_hz", "jitter_ms", "net_ms", "proc_ms"):
+    for key in (
+        "latency_ms_p50",
+        "latency_ms_p95",
+        "motion_rate_hz",
+        "jitter_ms",
+        "net_ms",
+        "proc_ms",
+    ):
         assert key in data, f"campo {key} ausente em /metrics (F11.3)"
         assert isinstance(data[key], (int, float))
     await ws.close()
@@ -84,7 +91,7 @@ async def test_l3_custo_zero_com_overlay_desligado(live_server):
         while True:
             raw = await asyncio.wait_for(ws.recv(), timeout=0.2)
             received.append(json.loads(raw)["type"])
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         pass
     assert set(received) <= {"ping"}, f"mensagens inesperadas no caminho crítico: {received}"
     await ws.close()
@@ -110,9 +117,7 @@ def test_l4_janela_de_latencia():
     expected_jitter = statistics.pstdev(latencies)
     assert snapshot["jitter_ms"] == pytest.approx(expected_jitter)
     # latency_ms_* ≈ net + proc na mesma janela
-    assert snapshot["latency_ms_p50"] == pytest.approx(
-        snapshot["net_ms"] + percentile(procs, 0.5)
-    )
+    assert snapshot["latency_ms_p50"] == pytest.approx(snapshot["net_ms"] + percentile(procs, 0.5))
     assert math.isfinite(snapshot["latency_ms_p95"])
 
 

@@ -140,9 +140,7 @@ def parse_message(raw: str | bytes) -> Message | None:
 
 def hello_message(session_id: str) -> str:
     """Serializa a mensagem `hello` enviada na abertura da sessão (F1.3)."""
-    return json.dumps(
-        {"type": "hello", "session_id": session_id, "server_version": SERVER_VERSION}
-    )
+    return json.dumps({"type": "hello", "session_id": session_id, "server_version": SERVER_VERSION})
 
 
 def vibrate_message(intensity: float, duration_ms: int) -> str:

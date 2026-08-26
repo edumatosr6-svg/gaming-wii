@@ -14,8 +14,8 @@ import logging
 import ssl
 import sys
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
 from websockets.asyncio.server import Server, ServerConnection, serve
@@ -172,9 +172,7 @@ def make_process_request(
 ) -> Callable[[ServerConnection, Request], Awaitable[Response | None]]:
     """Cria o roteador HTTP que convive com o handshake WebSocket."""
 
-    async def process_request(
-        connection: ServerConnection, request: Request
-    ) -> Response | None:
+    async def process_request(connection: ServerConnection, request: Request) -> Response | None:
         parsed = urlparse(request.path)
         path = parsed.path
         if path == "/ws":

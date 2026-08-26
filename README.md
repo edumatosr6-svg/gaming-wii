@@ -22,7 +22,14 @@ Especificações completas em `specs/wii-controller/`.
 python -m venv .venv          # recomendado
 .venv\Scripts\activate
 pip install -r requirements.txt
+playwright install chromium   # passo único: navegador dos testes de integração
 ```
+
+O `playwright install chromium` é obrigatório para rodar a suíte: os testes de
+integração em navegador headless (W11–W19) fazem parte da execução padrão e
+**não são pulados** quando o navegador falta — a suíte falha apontando este
+comando. Pular essa faixa foi exatamente o modo de falha que deixou passar os
+defeitos de integração com o DOM.
 
 ## Uso
 
@@ -33,8 +40,9 @@ python server/main.py [--port N]
 O terminal imprime as URLs:
 
 - **Controle (celular):** `https://<ip-do-pc>:8443/` — aceite o aviso do
-  certificado autoassinado na primeira visita, informe o IP e toque em
-  Conectar.
+  certificado autoassinado na primeira visita. A conexão é **automática**: o
+  endereço vem da própria URL, sem digitação. A tela de pareamento manual só
+  aparece se a página for aberta fora do servidor.
 - **Jogo (PC):** `https://localhost:8443/game/` — Duck Shooting, lê o gamepad
   virtual pela Gamepad API. Tecla `O` alterna o overlay de latência.
 
@@ -47,9 +55,12 @@ padrão): `python server/main.py --direct-metrics`.
 pytest -q
 ```
 
-Um comando único roda a suíte inteira (servidor Python e lógica JS do jogo via
-`node --test`). Testes que exigem hardware/driver ficam marcados com
-`@pytest.mark.hardware` e fora da execução padrão.
+Um comando único roda a suíte inteira: servidor Python, lógica JS do jogo via
+`node --test` e os testes de integração em navegador headless (Playwright +
+Chromium). Testes que exigem hardware/driver ficam marcados com
+`@pytest.mark.hardware` e fora da execução padrão — e não contam como
+cobertura: o relatório de testes precisa dizer explicitamente o que ficou por
+verificar manualmente.
 
 Lint/formatação: `ruff check server tests`, `black --check server tests`,
 `prettier --check "web/**/*.js" "game/**/*.js"`.

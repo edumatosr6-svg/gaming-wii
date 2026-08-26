@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from server.gamepad import NullGamepad, select_gamepad
-from server.gamepad.base import BUTTON_ORDER, GamepadUnavailableError, VirtualGamepad, axis_to_native
+from server.gamepad.base import (
+    BUTTON_ORDER,
+    GamepadUnavailableError,
+    VirtualGamepad,
+    axis_to_native,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
