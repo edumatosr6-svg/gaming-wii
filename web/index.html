@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>wii-controller</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="error-banner" class="banner error" hidden></div>
+    <div id="rotate-hint" class="banner hint" hidden>Gire o aparelho para paisagem</div>
+
+    <section id="pair-screen">
+      <h1>wii-controller</h1>
+      <p>Informe o IP do PC (mostrado no terminal do servidor):</p>
+      <label>
+        IP
+        <input id="ip-input" type="text" inputmode="decimal" placeholder="192.168.0.10" />
+      </label>
+      <label>
+        Porta
+        <input id="port-input" type="text" inputmode="numeric" />
+      </label>
+      <button id="connect-button" type="button">Conectar</button>
+    </section>
+
+    <section id="pad-screen" hidden>
+      <div id="status-banner" class="banner status">conectando…</div>
+      <div id="debug-line" class="banner debug"></div>
+      <div id="buttons-area">
+        <div class="shoulder-row">
+          <button class="pad-button shoulder" data-button="lb" type="button">L</button>
+          <button class="pad-button shoulder" data-button="rb" type="button">R</button>
+        </div>
+        <div class="main-row">
+          <div class="dpad">
+            <button class="pad-button" data-button="up" type="button">▲</button>
+            <div class="dpad-middle">
+              <button class="pad-button" data-button="left" type="button">◀</button>
+              <button class="pad-button" data-button="right" type="button">▶</button>
+            </div>
+            <button class="pad-button" data-button="down" type="button">▼</button>
+          </div>
+          <div class="center-column">
+            <button class="pad-button small" data-button="back" type="button">BACK</button>
+            <button id="calibrate-button" class="pad-button small calibrate" type="button">
+              CALIBRAR
+            </button>
+            <button class="pad-button small" data-button="start" type="button">START</button>
+          </div>
+          <div class="face-buttons">
+            <button class="pad-button face y" data-button="y" type="button">Y</button>
+            <button class="pad-button face x" data-button="x" type="button">X</button>
+            <button class="pad-button face b" data-button="b" type="button">B</button>
+            <button class="pad-button face a" data-button="a" type="button">A</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

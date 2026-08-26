@@ -1,0 +1,201 @@
+/* Interface do controle — paisagem, sem scroll/zoom/seleção (F2). */
+
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* O JS alterna telas pelo atributo hidden; sem isto, os display:flex das
+   seções sobrepõem o display:none do atributo e a troca de tela não ocorre. */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  /* Bloqueia o "puxar para atualizar" do Chrome Android, que recarregaria a
+     página no meio do jogo e derrubaria a conexão. */
+  overscroll-behavior: none;
+  background: #1b1e24;
+  color: #e8e8e8;
+  font-family: system-ui, sans-serif;
+  touch-action: none;
+}
+
+#pair-screen {
+  touch-action: auto;
+  padding: 2rem;
+  max-width: 26rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+#pair-screen input {
+  width: 100%;
+  padding: 0.6rem;
+  font-size: 1.1rem;
+  border-radius: 6px;
+  border: 1px solid #555;
+  background: #2a2e36;
+  color: #e8e8e8;
+}
+
+#connect-button {
+  padding: 0.9rem;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 8px;
+  background: #2f81f7;
+  color: white;
+}
+
+.banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  /* As faixas cobrem a fileira de ombro (L/R) e o rodapé do pad; sem isto elas
+     recebem o toque no lugar do botão. A reconexão é automática, então nenhuma
+     delas precisa ser clicável. */
+  pointer-events: none;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.banner.error {
+  top: 0;
+  background: #b3261e;
+  color: white;
+}
+
+.banner.hint {
+  bottom: 0;
+  background: #7a5c00;
+  color: white;
+}
+
+.banner.status {
+  top: 0;
+  background: #2b3d2f;
+}
+
+.banner.status.disconnected {
+  background: #b3261e;
+}
+
+.banner.debug {
+  bottom: 0;
+  background: #101216;
+  color: #8fb0d0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.7rem;
+  padding: 0.2rem;
+}
+
+#pad-screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#buttons-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.2rem 1rem 1rem;
+}
+
+.shoulder-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.main-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.pad-button {
+  border: 2px solid #4a4f59;
+  border-radius: 12px;
+  background: #2a2e36;
+  color: #e8e8e8;
+  font-size: 1.3rem;
+  min-width: 3.6rem;
+  min-height: 3.6rem;
+  touch-action: none;
+}
+
+.pad-button.pressed {
+  background: #2f81f7;
+  border-color: #7db4ff;
+}
+
+.pad-button.shoulder {
+  min-width: 7rem;
+}
+
+.pad-button.small {
+  min-height: 2.4rem;
+  font-size: 0.85rem;
+}
+
+.pad-button.calibrate {
+  border-color: #d4a017;
+}
+
+.dpad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.dpad-middle {
+  display: flex;
+  gap: 3.8rem;
+}
+
+.center-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.face-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 4rem);
+  grid-template-rows: repeat(2, 4rem);
+  gap: 0.6rem;
+}
+
+.face-buttons .y {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.face-buttons .x {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.face-buttons .b {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.face-buttons .a {
+  grid-column: 2;
+  grid-row: 2;
+}

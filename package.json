@@ -1,0 +1,6 @@
+{
+  "name": "wii-controller",
+  "private": true,
+  "type": "module",
+  "description": "Marcador de módulos ES para o runner nativo do Node (node --test). Não há dependências npm — restrição das coding directives."
+}

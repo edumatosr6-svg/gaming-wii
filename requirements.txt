@@ -1,0 +1,10 @@
+# Runtime (specs/wii-controller/tools/dependencies.md)
+websockets>=13.0
+vgamepad>=0.1.0; sys_platform == "win32"
+cryptography>=42.0
+
+# Desenvolvimento/teste (tools/tooling.md)
+pytest>=8.0
+pytest-asyncio>=0.23
+ruff>=0.4
+black>=24.0

@@ -1,0 +1,13 @@
+# Certificado TLS autoassinado: gerado por máquina, contém chave privada.
+server/certs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Pacote redundante do processo (mesmo conteúdo já versionado na raiz)
+ai-swdev-process.zip
+ai-swdev-process/
