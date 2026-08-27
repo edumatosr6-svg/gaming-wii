@@ -15,16 +15,37 @@
 
 - **Cliente web no celular**: página aberta pelo navegador do A57, sem instalação
   de APK e sem etapa de build. Deve funcionar em tela cheia, travar a orientação em
-  paisagem, e impedir scroll, zoom e seleção de texto acidentais durante o jogo.
+  **retrato (vertical)**, e impedir scroll, zoom e seleção de texto acidentais
+  durante o jogo.
+
+  **MUDANÇA DE CONCEITO (revisão humana, decisão que substitui a anterior de
+  paisagem):** o celular é segurado **na vertical, como um Wii Remote** — em pé na
+  mão, com o polegar sobre a tela e o topo do aparelho apontado para a TV/monitor.
+  A decisão anterior de paisagem tratava o celular como um gamepad de duas mãos;
+  o teste real mostrou que isso torna o controle confuso de segurar e de entender.
+  A pegada vertical de uma mão é a identidade do produto.
 
 - **Pareamento por IP**: tela inicial onde o usuário informa o IP do PC. O último IP
   usado é lembrado no dispositivo para que reconexões futuras sejam de um toque só.
 
-- **Controle por inclinação (o "modo Wii")**: leitura contínua do giroscópio /
-  orientação do aparelho. A inclinação frente-trás e esquerda-direita é convertida
-  em um eixo analógico de dois graus de liberdade (por padrão o analógico direito,
-  usado para mira/direção). Deve ter zona morta configurável perto do centro,
-  sensibilidade ajustável e saturação suave ao atingir o ângulo máximo.
+- **Controle por apontamento (o "modo Wii") — a metáfora do infravermelho**:
+  leitura contínua do giroscópio / orientação do aparelho, **com o celular na
+  vertical**. O modelo mental oferecido ao usuário é este: **finja que existe um
+  emissor infravermelho no topo do celular, logo acima da câmera de selfie, como o
+  sensor na ponta de um Wii Remote.** Onde o topo do aparelho aponta, a mira está.
+
+  - Apontar o topo do celular para cima/baixo (levantar e abaixar a "ponta") move a
+    mira verticalmente; girar o pulso para os lados (apontar a ponta para esquerda/
+    direita) move horizontalmente.
+  - A metáfora não é decoração: é a **definição do mapeamento de eixos**. Toda
+    decisão de conversão ângulo→mira deve responder à pergunta "para onde o
+    infravermelho imaginário está apontando?" — se a resposta e a mira divergirem,
+    o mapeamento está errado.
+  - A interface do celular deve **ensinar** essa metáfora: na tela de entrada/
+    calibração, uma ilustração ou animação curta mostra o aparelho em pé apontando
+    para a tela, deixando óbvio como segurar e mirar sem ler manual.
+  - Continua valendo: zona morta configurável perto do centro, sensibilidade
+    ajustável e saturação suave ao atingir o ângulo máximo.
 
   **Apontar, não pilotar (o ponto central do "modo Wii").** A inclinação define a
   **posição** da mira, não a velocidade dela. Apontar o aparelho para um lugar coloca
@@ -42,20 +63,38 @@
 
   **Ergonomia da mira.** Quanto o pulso precisa girar para varrer a tela inteira é
   parâmetro de conforto e precisa de valor justificado; a suavização contra tremor não
-  pode custar resposta perceptível; e o sentido dos eixos (inclinar para a direita
-  leva a mira para a direita, e para cima leva para cima, com o aparelho em paisagem)
-  precisa estar correto e verificado — um sinal invertido é indistinguível de
-  "controle confuso".
+  pode custar resposta perceptível; e o sentido dos eixos (**com o aparelho na
+  vertical**: apontar a ponta para a direita leva a mira para a direita, levantar a
+  ponta leva a mira para cima) precisa estar correto e verificado — um sinal
+  invertido é indistinguível de "controle confuso". Atenção especial do mapeamento:
+  na pegada vertical, os ângulos do sensor que correspondem a cada eixo da mira são
+  **diferentes** dos da pegada em paisagem — reaproveitar o mapeamento antigo sem
+  revisão produz exatamente o eixo trocado/invertido que este parágrafo proíbe.
 
 - **Calibração de centro**: comando explícito que define a posição atual do aparelho
   como o "zero" da inclinação. Necessário porque a posição neutra muda conforme o
   usuário está sentado, deitado ou em pé. Deve poder ser reexecutado a qualquer
   momento sem reiniciar a sessão.
 
-- **Botões touch**: A, B, X, Y, D-pad de 4 direções, botões de ombro L e R, e
-  START/BACK. Precisa suportar múltiplos toques simultâneos (ex: segurar L enquanto
-  aperta A e inclina o aparelho). Cada botão dá retorno visual imediato ao ser
-  pressionado.
+- **Botões touch com visual de Wii Remote**: a tela do celular, na vertical, é
+  desenhada como o corpo de um controle — a interface **parece um controle**, não
+  uma página com botões. Layout em coluna, inspirado no Wii Remote e pensado para o
+  polegar de uma mão:
+
+  - **D-pad** na parte de cima (onde o polegar alcança com o aparelho em pé);
+  - **botão A** grande e central, o botão principal — no Wii Remote ele domina o
+    corpo do controle, e aqui também deve dominar;
+  - **B, X, Y** menores, próximos do A;
+  - **START/BACK** discretos no meio do corpo (como −/+/HOME no Wii Remote);
+  - **L e R** na parte de baixo da tela;
+  - no **topo da tela, acima de tudo, a representação visual do "sensor
+    infravermelho"** — um elemento decorativo (a "ponta" do controle) que ancora a
+    metáfora de apontamento e indica o estado da mira/conexão.
+
+  O mapeamento para os botões XInput não muda: continuam sendo A, B, X, Y, D-pad,
+  LB, RB, START e BACK — o que muda é a disposição e a aparência. Continua exigido:
+  múltiplos toques simultâneos (ex.: segurar L enquanto aperta A e aponta) e retorno
+  visual imediato em cada botão.
 
 - **Emulação de gamepad no PC**: os inputs recebidos são traduzidos em um controle
   virtual reconhecido pelo sistema operacional como um gamepad padrão, de modo que
