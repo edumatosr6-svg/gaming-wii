@@ -1,0 +1,102 @@
+/* Sem imagens e sem fontes externas: só formas e cores (F14). */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0b0d16;
+  color: #f4f4f8;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+
+#game-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* As quatro telas são mutuamente exclusivas: `hidden` remove do layout, e é
+   isso que a checagem de geometria de B10 observa. */
+.screen[hidden] {
+  display: none !important;
+}
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.screen[data-screen='aguardando'],
+.screen[data-screen='calibracao'],
+.screen[data-screen='gameOver'] {
+  background: rgba(8, 10, 20, 0.88);
+}
+
+.screen[data-screen='jogando'] {
+  justify-content: flex-start;
+  padding: 0;
+  background: transparent;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  letter-spacing: 0.02em;
+}
+
+.instrucao {
+  margin: 0;
+  max-width: 46ch;
+  line-height: 1.5;
+  color: #c9cbe0;
+}
+
+.estado {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+#calibracao-estado[data-stable='sim'] {
+  color: #46d18a;
+}
+
+#calibracao-estado[data-stable='nao'] {
+  color: #ffb84d;
+}
+
+.motivo {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #ff8f8f;
+}
+
+.hud {
+  width: 100%;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background: rgba(8, 10, 20, 0.72);
+  font-size: 1.05rem;
+}
+
+.hud-item b {
+  color: #ffd166;
+}

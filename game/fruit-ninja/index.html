@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fruit Ninja — wii-controller</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <canvas id="game-canvas"></canvas>
+
+    <section class="screen" data-screen="aguardando" id="screen-aguardando">
+      <h1>Aguardando controle</h1>
+      <p class="instrucao">
+        Conecte o celular pelo <strong>wii-controller</strong> e mantenha a página do controle
+        aberta. Assim que o gamepad aparecer, a calibração começa automaticamente.
+      </p>
+    </section>
+
+    <section class="screen" data-screen="calibracao" id="screen-calibracao" hidden>
+      <h1>Calibração</h1>
+      <p class="instrucao">
+        Segure o aparelho na posição em que vai jogar e pressione <strong>A</strong> para
+        calibrar. A lâmina precisa ficar parada no centro antes de começar.
+      </p>
+      <p class="estado">Lâmina: <span id="calibracao-estado" data-stable="nao">instável</span></p>
+      <p class="instrucao">Pressione <strong>Start</strong> para iniciar a partida.</p>
+    </section>
+
+    <section class="screen" data-screen="jogando" id="screen-jogando" hidden>
+      <div class="hud">
+        <span class="hud-item">Pontos: <b id="hud-score">0</b></span>
+        <span class="hud-item">Recorde: <b id="hud-high">0</b></span>
+        <span class="hud-item">Vidas: <b id="hud-lives">♥♥♥</b></span>
+        <span class="hud-item">Combo: <b id="hud-combo">0</b></span>
+        <span class="hud-item">Nível: <b id="hud-level">1</b></span>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="gameOver" id="screen-gameover" hidden>
+      <h1>Fim de jogo</h1>
+      <p class="motivo" id="gameover-motivo">Fim de jogo</p>
+      <p class="estado" id="gameover-pontos">Pontos: 0</p>
+      <p class="instrucao">
+        <strong>Start</strong> joga de novo · <strong>A</strong> volta para a calibração
+      </p>
+    </section>
+
+    <script type="module" src="./js/main.js"></script>
+  </body>
+</html>

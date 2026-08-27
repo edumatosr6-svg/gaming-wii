@@ -38,7 +38,14 @@ def test_suite_js_via_node():
 
 
 def _game_js_files() -> list[Path]:
-    return sorted((ROOT / "game").rglob("*.js"))
+    """Só o Duck Shooting (`game/js`).
+
+    As checagens G13/G14/G6 abaixo são regras do slug `wii-controller`. Varrer
+    `game/**` fazia elas alcançarem `game/fruit-ninja/`, que tem regras próprias
+    (X1–X12, em `tests/test_fruit_ninja_static.py`) e cuja exceção de `fetch` é
+    `js/rumble.js`, não `rumble-fallback.js`.
+    """
+    return sorted((ROOT / "game" / "js").rglob("*.js"))
 
 
 def test_g13_sem_websocket_de_input_no_jogo():
