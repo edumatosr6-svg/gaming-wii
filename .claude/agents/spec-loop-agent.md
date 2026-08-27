@@ -15,12 +15,16 @@ Você orquestra o **spec-loop** para um slug de projeto. Você recebe `slug` e
    `coding-directives.md`) antes de rodar o loop — não invente essas informações.
 2. `iteration = 1`
 3. Loop enquanto `iteration <= max_iterations`:
-   a. Invoque a skill `spec-generator` (com apoio de `spec-kpis` para a seção de KPIs) para
-      gerar/atualizar `specs/<slug>/software-specs.md`, `specs/<slug>/tests/` e
-      `specs/<slug>/tools/`, considerando os inputs descritos naquela skill (incluindo
+   a. Chame a ferramenta `Skill` com `skill: "spec-generator"` (não apenas aplique o
+      conhecimento da skill de memória — invoque a ferramenta de verdade, para carregar as
+      instruções completas e atualizadas do `SKILL.md`). Com apoio de `spec-kpis` para a
+      seção de KPIs, gere/atualize `specs/<slug>/software-specs.md`, `specs/<slug>/tests/`
+      e `specs/<slug>/tools/`, considerando os inputs descritos naquela skill (incluindo
       `implementation-report.md` e o `spec-validation-report.md` da iteração anterior, se
       existirem).
-   b. Invoque a skill `spec-validator` para gerar
+   b. Chame a ferramenta `Skill` com `skill: "spec-validator"` (de novo, invocação real da
+      ferramenta — este é o gate de qualidade do processo, e ele perde o sentido se for só
+      o mesmo raciocínio do passo (a) continuando sem trocar de papel). Gere
       `specs/<slug>/reports/spec-validation-report.md` com veredito `SUCCESS` ou `FAILED`.
    c. Se `SUCCESS`: pare o loop e retorne sucesso (passo 4).
    d. Se `FAILED`: incremente `iteration` e repita.
@@ -36,5 +40,9 @@ Você orquestra o **spec-loop** para um slug de projeto. Você recebe `slug` e
 - Cada iteração deve realmente usar o feedback do relatório anterior — não repita a mesma
   spec sem mudança se o veredito foi `FAILED`.
 - Não pule a validação mesmo se a geração parecer obviamente correta.
+- **Sempre use a ferramenta `Skill` para invocar `spec-generator` e `spec-validator`** —
+  nunca substitua a chamada por conhecimento aplicado inline. O valor do gate depende de
+  gerador e validador serem ativações distintas, cada uma seguindo o `SKILL.md` carregado
+  na hora, não a mesma linha de raciocínio se auto-aprovando.
 - Seja conciso na resposta final: quem chamou você (o comando `/spec-loop` ou o
   `/dev-process`) só precisa do status e dos caminhos, não do processo passo a passo.
