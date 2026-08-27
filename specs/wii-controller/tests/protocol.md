@@ -11,9 +11,10 @@ Automatizados com `pytest -q`; o gamepad virtual é um dublê.
   (não exceção propagada).
 - **P3 — `type` desconhecido**: descartado sem efeito no estado.
 - **P4 — Campos ausentes**: `motion` sem `b`/`g`/`t`, `button` sem `id` ou `down` →
-  descartados.
-- **P5 — Tipos errados**: `b` string, `down` número, `intensity` booleano →
-  descartados ou saturados conforme documentado; nunca exceção não tratada.
+  descartados. Exceção documentada: `motion` com `a: null` é **válido** (sensor sem
+  alpha — Data Models); `motion` sem o campo `a` é descartado.
+- **P5 — Tipos errados**: `a` string, `b` string, `down` número, `intensity` booleano
+  → descartados ou saturados conforme documentado; nunca exceção não tratada.
 - **P6 — `button.id` fora do enum**: id não listado (ex.: `"lt"`, `""`, unicode) é
   descartado.
 - **P7 — Payload gigante**: mensagem de tamanho anômalo (ex.: 1 MB) é descartada sem
@@ -26,8 +27,9 @@ Automatizados com `pytest -q`; o gamepad virtual é um dublê.
 - **P9 — Corpus de fuzzing leve**: enviar uma sequência de ~100 mensagens malformadas
   variadas intercaladas com válidas; o servidor processa as válidas normalmente e não
   cai (critérios F1.4, KPI-9: 0 crashes).
-- **P10 — Fluxo motion→estado**: mensagem `motion` válida atualiza o eixo do gamepad
-  fake conforme `mapping.py` (fio de ponta a ponta sem driver real).
+- **P10 — Fluxo motion→estado**: mensagem `motion` válida (`a`, `b`, `g`, `t`)
+  atualiza o eixo do gamepad fake conforme `mapping.py` — posição apontada absoluta
+  (fio de ponta a ponta sem driver real).
 - **P11 — Fluxo button→estado**: `button {id: "a", down: true}` liga o botão A no
   fake; `down: false` desliga.
 - **P12 — `vibrate` saindo**: um rumble injetado no fake resulta em mensagem `vibrate`

@@ -25,13 +25,20 @@ essa lógica e o DOM/navegador, faixa que antes não tinha nenhum teste.
   (F6.3). *Impede que o botão seja resolvido pelo elemento sob o dedo a cada
   movimento, o que trocaria de botão no meio do arrasto.*
 - **W3 — Formato das mensagens**: as mensagens geradas pelo cliente validam contra o
-  schema de `protocol.py` (mesmos campos e tipos da tabela em software-specs.md).
+  schema de `protocol.py` (mesmos campos e tipos da tabela em software-specs.md);
+  `motion` carrega os **três** ângulos `a`, `b`, `g` (com `a: null` quando o sensor
+  não reportar alpha) e `t`.
 
 ## Integração em navegador headless [obrigatórios na suíte padrão]
 
 Carregam a página real do controle servida pelo servidor real, com emulação de toque,
 e inspecionam o que efetivamente sai pelo socket. Cada caso abaixo corresponde a um
 defeito que chegou ao usuário final e que nenhuma outra faixa de teste detectaria.
+
+**Viewport obrigatório: retrato** (dimensões do aparelho de referência em pé, ex.
+412×915 CSS px). A interface é um corpo de Wii Remote vertical (F2); medir geometria
+em viewport de paisagem valida um layout que não existe mais e mascara todos os
+defeitos de disposição.
 
 - **W11 — Uma tela por vez**: dado o cliente em cada um dos quatro estados
   (`pareamento`, `conectando`, `conectado`, `desconectado`), quando se mede a caixa de
@@ -81,16 +88,36 @@ defeito que chegou ao usuário final e que nenhuma outra faixa de teste detectar
   máquina de estados de telas.
 
 - **W21 — Faixas visíveis não se cobrem**: dado quaisquer duas faixas persistentes
-  (status, erro, dica de rotação, diagnóstico) visíveis ao mesmo tempo, quando se
-  medem suas caixas de layout, então elas não se intersectam (F2.2, F2.3, F9.6).
+  (status, erro, dica de orientação, diagnóstico) visíveis ao mesmo tempo, quando se
+  medem suas caixas de layout **em viewport retrato**, então elas não se intersectam
+  (F2.2, F2.3, F9.6).
   *Cobre a classe de defeito "CSS anula um mecanismo de JS que está correto": faixas
   ancoradas individualmente na mesma borda se cobrem conforme a ordem do documento, e
   foi assim que o aviso de erro dos sensores ficou mudo por baixo da faixa de status e
-  a dica de rotação ficou ilegível sob a linha de diagnóstico. Nenhuma outra faixa de
-  teste detecta isso: a lógica pura não conhece layout, e W11/W14 medem as telas e a
-  captura de toque, não a legibilidade de faixas sobrepostas. O teste força o cenário
-  adverso — todas as faixas visíveis simultaneamente — porque o estado normal tem uma
-  faixa por borda e esconde o defeito.*
+  a dica de orientação ficou ilegível sob a linha de diagnóstico. Nenhuma outra faixa
+  de teste detecta isso: a lógica pura não conhece layout, e W11/W14 medem as telas e
+  a captura de toque, não a legibilidade de faixas sobrepostas. O teste força o
+  cenário adverso — todas as faixas visíveis simultaneamente — porque o estado normal
+  tem uma faixa por borda e esconde o defeito.*
+- **W22 — Geometria do corpo de Wii Remote**: dado a tela `conectado` em viewport
+  retrato, quando se medem as caixas de layout dos controles, então (critério F2.10):
+  (a) a ordem vertical dos centros, de cima para baixo, é ponta do sensor → D-pad →
+  A → START/BACK → L/R; (b) a área de toque do botão A é estritamente maior que a de
+  qualquer outro botão; (c) o centro do A dista do eixo vertical central no máximo 5%
+  da largura do viewport; (d) cada um de B, X e Y tem centro mais próximo do centro
+  do A do que dos centros de qualquer botão do D-pad, de L e de R. *Reprova o
+  reaproveitamento do layout de paisagem, que não tem nem a ordem nem a dominância do
+  A.*
+- **W23 — Ponta do sensor ancorada e com estado**: dado cada um dos quatro estados de
+  `ClientViewState`, quando se inspeciona o elemento da ponta do sensor, então na
+  tela `conectado` ele está visível acima de todos os controles acionáveis (menor
+  centro-y), e em cada estado ele carrega classe/atributo distinto que reflete o
+  estado de conexão (critério F2.11).
+- **W24 — Ilustração de pegada ensina a segurar**: dado os estados `pareamento` e
+  `conectando`, quando se mede a caixa de layout do elemento de ilustração da pegada,
+  então ele tem área maior que zero em ambos (critério F2.12). *A tela de entrada
+  deve ensinar a pegada vertical sem manual — a ilustração ausente ou oculta por CSS
+  reprova.*
 
 ## Manuais no aparelho de referência [manual/hardware]
 
@@ -100,9 +127,10 @@ procedimento sem critério observável não pode reprovar uma implementação er
 - **W4 — Sem dependências externas**: com o celular sem acesso à internet (apenas
   Wi-Fi local), a página carrega e funciona. *Observar:* o painel de rede do navegador
   não lista nenhuma requisição a domínio externo (F2.1).
-- **W5 — Fullscreen + paisagem**: após o toque inicial. *Observar:* a barra do
-  navegador some, a tela fica em paisagem, e gestos de scroll/zoom/duplo-toque não
-  movem nem redimensionam a interface (F2.2).
+- **W5 — Fullscreen + retrato**: após o toque inicial. *Observar:* a barra do
+  navegador some, a tela permanece em **retrato** (mesmo girando o aparelho para
+  apontar), e gestos de scroll/zoom/duplo-toque não movem nem redimensionam a
+  interface (F2.2).
 - **W6 — Sensor indisponível falha alto**: servindo por HTTP simples ou negando a
   permissão. *Observar:* aviso visível nomeando o problema em ≤ 2 s (F2.3).
 - **W7 — Persistência do pareamento manual**: abrir a página fora do servidor.
@@ -118,7 +146,19 @@ procedimento sem critério observável não pode reprovar uma implementação er
   *Observar:* a mira volta ao centro imediatamente e ali permanece com o aparelho
   parado; repetir a calibração em outra posição funciona sem reconectar (F5.1, F5.2).
 - **W20 — Sessão jogável fim-a-fim**: com o servidor no ar e o Duck Shooting aberto no
-  PC, jogar uma rodada completa usando apenas o celular. *Observar:* a mira acompanha
-  a inclinação, o botão A dispara, a calibração recentraliza, e nenhum controle fica
-  inerte durante a partida. **Este é o critério de "o produto funciona"** — nenhuma
-  entrega pode ser declarada pronta sem ele.
+  PC, jogar uma rodada completa usando apenas o celular, **segurando-o em pé como um
+  Wii Remote**. *Observar:* **a mira está onde a ponta do aparelho aponta** (apontar
+  para um canto leva a mira ao canto; voltar ao neutro recentra a mira — ela nunca
+  fica "à deriva"), o botão A dispara, a calibração recentraliza, e nenhum controle
+  fica inerte durante a partida. **Este é o critério de "o produto funciona"** —
+  nenhuma entrega pode ser declarada pronta sem ele.
+- **W22m — Ergonomia e sentido do apontamento (KPI-18, F4)**: com o jogo aberto e o
+  aparelho calibrado na pegada vertical. *Observar:* (a) apontar a ponta para a
+  **direita** move a mira para a **direita**; para a esquerda, esquerda; **levantar**
+  a ponta move a mira para **cima**; abaixar, baixo — 4/4 direções corretas, sem
+  nenhuma inversão; (b) varrer a mira de uma borda à outra da tela é possível **só
+  com o giro do pulso**, sem mover o cotovelo (`MAX_ANGLE_DEG` padrão de 20° — se
+  exigir o braço, o parâmetro reprova); (c) torcer o aparelho no próprio eixo (ponta
+  fixa) **não** desloca a mira perceptivelmente; (d) a mira responde sem atraso
+  perceptível ("a mira obedece" — a suavização padrão não pode ser sentida como
+  borracha).

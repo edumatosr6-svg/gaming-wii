@@ -13,9 +13,11 @@
   cobre servidor e jogo.
 - **Testes de integração em navegador headless: obrigatórios na execução padrão.**
   Carregam a página real do controle servida pelo servidor real, emulam toque e
-  inspecionam as mensagens que saem pelo socket (casos W11–W19). Ferramenta:
-  Playwright para Python, dirigindo Chromium — mesma família do navegador do aparelho
-  de referência. Justificativa: a suíte anterior cobria lógica pura e servidor, e
+  inspecionam as mensagens que saem pelo socket e a geometria do layout (casos
+  W11–W24). Ferramenta: Playwright para Python, dirigindo Chromium — mesma família do
+  navegador do aparelho de referência. **Viewport retrato obrigatório** nos casos que
+  medem geometria (dimensões do A57 em pé, ex. 412×915): a interface é um corpo de
+  Wii Remote vertical (F2), e medir em paisagem valida um layout que não existe mais. Justificativa: a suíte anterior cobria lógica pura e servidor, e
   passava com 52 testes enquanto o produto era inutilizável; **toda a faixa de
   defeitos vivia na integração com o DOM**, que ficava sem teste algum.
   Estes testes **não podem ser marcados como opcionais nem pulados em silêncio**: se o

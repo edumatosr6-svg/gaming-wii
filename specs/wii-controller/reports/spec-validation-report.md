@@ -2,79 +2,73 @@
 
 **Veredito: SUCCESS**
 
-_Iteração 4 — 2026-08-26 (segunda rodada após o `implementation-report.md`)_
+_Iteração 2 — 2026-08-27 (rodada do modelo de apontamento + pegada vertical)_
 
 ## Pontos verificados
-- [x] Completude — F1–F11 cobrem `descriptions.md`, cada uma com critérios de aceite
-  verificáveis. A camada de interação do cliente, que o relatório apontou como
-  território não especificado, agora tem critérios próprios: F2.5–F2.9 (estados
-  visuais, semântica de toque, interceptação, momento do fullscreen), F6.3 (posse do
-  toque), F9.5–F9.7 (reconexão automática, estado visível, proibição de falha
-  silenciosa) e F7.5 (inicialização com o driver real).
-- [x] KPIs — todos rastreados a uma feature e a um procedimento nomeado. KPI-12 a
-  KPI-15 fecham as lacunas do relatório: controles acionáveis só por toque (W12–W14),
-  produto jogável fim-a-fim (W20), ausência de falha silenciosa (W11/W19) e
-  inicialização com o driver real (E10). Nenhum KPI vago; a taxa de acerto segue
-  declarada como métrica comparativa, não como meta absoluta.
-- [x] Testabilidade — caminho feliz, bordas e falhas cobertos por feature nos 7
-  arquivos de `tests/`. A faixa de integração em navegador headless (W11–W19, W2b) é
-  obrigatória na suíte padrão e cada caso mapeia para um critério de aceite. Os casos
-  manuais declaram o que o operador deve **observar** (E10, E11, C8, W4–W10, W20), e
-  não apenas o que executar — sem isso não seriam capazes de reprovar nada.
-- [x] Consistência interna — as 2 contradições da iteração 3 foram corrigidas:
-  1. F2 (primeiro bullet) não define mais o momento do fullscreen por conta própria;
-     delega ao bullet "Momento do modo imersivo" e remove a referência ao toque em
-     "Conectar", que o fluxo feliz não tem. Definição única, sem leitura dupla.
-  2. P2 passo 1 agora declara `conectando` como estado inicial do fluxo feliz,
-     alinhado à tabela de transições de `ClientViewState` e ao invariante de uma única
-     tela visível; `pareamento` só é inicial no caminho de exceção da F3.3.
-  Busca por referências obsoletas ("toca em Conectar", "botão de reconectar",
-  "informa/confirma o IP") não retorna ocorrências. Features, P1–P5 e data models
-  concordam entre si.
-- [x] **Consistência com `implementation-report.md`** — os 5 problemas relatados estão
-  endereçados, cada um com critério de aceite e caso de teste:
+- [x] Completude — a mudança de conceito do `descriptions.md` está integralmente
+  coberta: pegada vertical com orientação retrato (F2, F2.2), layout "corpo de Wii
+  Remote" normativo com ordem vertical, dominância do botão A e proximidade de B/X/Y
+  (F2.10), ponta do sensor ancorando a metáfora e refletindo o estado da conexão
+  (F2.11, W23), ilustração que ensina a pegada (F2.12, W24), modelo de apontamento
+  **absoluto** como requisito de primeira classe (F4), metáfora do infravermelho como
+  definição do mapeamento com sentido dos eixos normativo (F4.6), rolagem sem efeito
+  na mira (F4.7), ergonomia com critério observável (`MAX_ANGLE_DEG` 20° como
+  parâmetro de conforto verificável em W22m; orçamento de resposta da suavização em
+  F4.8), e o jogo consumindo **posição, não taxa** (F10.7–F10.10). Fruit Ninja
+  referenciado ao slug próprio `specs/fruit-ninja/` com contratos herdados explícitos.
+- [x] KPIs — KPI-16 (fidelidade do apontamento absoluto), KPI-17 (resposta da
+  suavização, ≤ 100 ms a 90% do degrau) e KPI-18 (sentido dos eixos, incluindo a
+  fronteira da Gamepad API) são mensuráveis, rastreados a features e a testes
+  nomeados. KPIs pré-existentes preservados e coerentes com o novo modelo (KPI-4
+  agora com a deriva de `alpha` como modo de falha declarado em L8).
+- [x] Testabilidade — cada critério novo tem caso de teste: M17–M18 (sentido e
+  rolagem, vetores sintéticos da pegada vertical), M19 (independência de histórico —
+  a propriedade exata que a implementação por velocidade viola), M20 (orçamento de
+  resposta), M8b (`alpha` nulo), G20–G22 (mira absoluta no jogo), G23 (normalização
+  da Gamepad API), W22 (geometria do layout em viewport retrato), W23–W24 (ponta do
+  sensor e ilustração), W22m (ergonomia manual com critério observável 4/4 direções +
+  varredura só com o pulso). Caminho feliz, bordas e falhas presentes.
+- [x] Consistência interna — **o problema 1 da iteração 1 está resolvido
+  (`recorrente: não`)**: F10 agora define a camada de normalização da convenção de
+  sinal da Gamepad API como responsabilidade única de `input.js` (função pura), F10.9
+  refere-se explicitamente ao valor **normalizado**, F10.10 dá o critério na
+  fronteira (`axes[3]` negativo = stick para cima ⇒ mira acima do centro) e G23 o
+  automatiza — a inversão vertical fim-a-fim deixou de ser um defeito invisível para
+  a suíte. Protocolo `motion` (`a/b/g/t`) consistente entre Data Models, F4, P2.4,
+  W3 e tests/protocol.md (P4 documenta `a: null` válido vs campo ausente descartado);
+  `SessionState`, `Config` e o invariante do `crosshair` no GameState concordam com
+  as features.
+- [x] Consistência com `implementation-report.md` — os 4 pedidos endereçados:
 
-  | Problema do relatório | Onde a spec passou a definir | Como reprova |
+  | Pedido do relatório | Onde a spec define | Como reprova |
   |---|---|---|
-  | 1. Integração com o driver não especificada além da presença | F7 (contrato), F7.5, P1 passo 3, data model "Contrato do gamepad virtual" | E10 (manual, observável), KPI-15 |
-  | 2. Troca de telas sem comportamento especificado | F2 (máquina de estados), F2.5, data model `ClientViewState` (estados, transições, invariantes), P5 | W11 |
-  | 3. Falha silenciosa / estado da conexão invisível | F9.5, F9.6, F9.7, `ClientViewState` invariantes 3 e 4 | W18, W19, C8, KPI-14 |
-  | 4a. `click` não existe no controle | F2.6, F2.9 | W12, W13, W16, checagem estática 5 |
-  | 4b. Elementos decorativos capturam o toque | F2.7 | W14, checagem estática 6 |
-  | 4c. Fullscreen cancela o toque em andamento | F2 ("Momento do modo imersivo"), F2.8, P2 passo 3 | W15 |
-  | 5. Testes não cobrem a camada de interação | `tests/client-controller.md` faixa 2 (obrigatória), `tools/tooling.md` (Playwright, proibição de pular) | a própria suíte falha se o navegador não estiver instalado |
+  | 1. Apontamento = posição absoluta, centro calibrado = centro da tela, máximo = bordas, com teste de independência de histórico | F4 (requisito de primeira classe), F4.1–F4.3, F10.7–F10.8, invariante do GameState | M19, G20, G21, KPI-16 |
+  | 2. Tensão com jogos de terceiros resolvida e documentada | F4 ("tensão resolvida por decisão": eixo transporta posição; terceiros = limitação conhecida, README deve declarar; perfis na segunda onda) | inspeção pelo impl-validator (ver Observações) |
+  | 3. Ergonomia com critério observável (ângulo máximo, suavização vs resposta, sentido dos eixos) | F4 (`MAX_ANGLE_DEG` 20°/15°–30° como parâmetro de conforto; F4.8 orçamento de resposta; F4.6 sentido normativo; F10.10 fronteira da API) | W22m, M17–M18, M20, G23, KPI-17, KPI-18 |
+  | 4. Especificar o Fruit Ninja | slug próprio `specs/fruit-ninja/` (aprovado), referência cruzada com contratos herdados | spec-loop do slug fruit-ninja |
 
-  As correções já aplicadas no código durante a revisão manual estão todas ratificadas
-  por spec, inclusive a de `controls.js`: F6 passou a definir a **posse do toque** pelo
-  controle de origem (com W2b cobrindo o arrasto entre botões), débito que a iteração 3
-  havia registrado como observação.
-- [x] Consistência com `references/` — contexto seguro via HTTPS autoassinado,
-  XInput/ViGEmBus/vgamepad, Gamepad API como único canal de input do jogo (exceção de
-  rumble isolada e documentada), Duck Hunt como referência de mecânica e não de
-  conteúdo.
-- [x] Tools — dependências mínimas e justificadas; `playwright` entra como dependência
-  de desenvolvimento com justificativa concreta (a faixa que ela cobre concentrou 100%
-  dos defeitos que chegaram ao usuário) e sem violar "cliente vanilla, sem npm".
-  Comando único `pytest -q` preservado. Nada especulativo.
+- [x] Tools — Playwright com **viewport retrato obrigatório** nos casos de geometria
+  (tooling.md); G23 roda no runner JS puro (`node --test` dentro do `pytest`), sem
+  ferramenta nova; nenhuma dependência supérflua adicionada.
 
 ## Problemas encontrados
-Nenhum.
+Nenhum bloqueante nesta iteração.
 
-## Observações
-- **O gate desta entrega não é a suíte automatizada.** KPI-13 (W20, partida completa só
-  com o celular) e KPI-15 (E10, servidor sobe com o driver real) exigem hardware e são
-  invisíveis ao `impl-tester`. Foi exatamente a ausência desse gate que permitiu
-  declarar sucesso com 52 testes verdes e produto inutilizável. `tools/tooling.md` já
-  proíbe declarar `SUCCESS` apoiado em faixa adiada para procedimento manual não
-  executado — o `impl-loop` deve respeitar isso ao fechar o ciclo.
-- **Fricção nova aceita conscientemente:** `playwright install chromium` como passo de
-  setup, e a suíte falhando (em vez de pular) quando o navegador está ausente. Pular em
-  silêncio era o modo de falha que deixou os defeitos passarem.
-- KPI-1 (p95 < 30 ms) segue ambicioso. A alternativa de formato binário para `motion`
-  continua prevista nos Data Models, com decisão adiada até haver medição — débito
-  consciente, não bloqueia a implementação.
-- A latência driver→jogo dentro do SO permanece fora da métrica do overlay por
-  definição; `--direct-metrics` existe para estimá-la por diferença. Suposição mantida.
-- O código já contém as correções manuais da revisão. Elas são **estado de partida**, e
-  agora estão cobertas por spec e por casos de teste; o `impl-loop` deve tratá-las como
-  comportamento exigido, não como solução a preservar tal como está.
+## Observações (mesmo com SUCCESS)
+
+- **Risco assumido: deriva de `alpha` (KPI-4).** No modelo vertical o eixo horizontal
+  deriva de `alpha`, o ângulo que mais escorrega em giroscópio relativo; a meta de 15
+  min dentro da zona morta ficou mais exigente que na paisagem (L8 já declara a
+  deriva horizontal como modo de falha esperado). Se o hardware de referência
+  reprovar consistentemente, a decisão (recalibração mais frequente vs. fonte de
+  orientação absoluta) deve voltar para revisão humana — não é defeito de spec.
+- Os vetores sintéticos (a, b, g) de M17/M18 ficam documentados no arquivo de teste,
+  derivados da convenção W3C do `DeviceOrientationEvent` — o `impl-tester` deve
+  derivá-los da spec W3C, nunca da implementação sob teste.
+- A exigência de F4 de declarar no README a limitação com jogos de terceiros é
+  verificável só por inspeção; o `impl-validator` deve checá-la explicitamente.
+- Os testes headless W11–W21 pré-existentes permanecem válidos, mas **devem ser
+  reexecutados em viewport retrato** (nota normativa no cabeçalho de
+  tests/client-controller.md e em tooling.md) — a suíte anterior media geometria de
+  um layout de paisagem que não existe mais.
+- Ordem dos procedures no documento (P5 antes de P4) é cosmética; não reprovável.

@@ -35,7 +35,10 @@ Pré-condição comum: A57 + PC na mesma rede Wi-Fi, servidor rodando, overlay a
   leituras.
 - **L8 — Deriva do centro (KPI-4)**: calibrar; apoiar o aparelho imóvel por 15 min
   com a tela do jogo aberta; aprovado se a mira permanece dentro da zona morta (eixo
-  em 0,0) ao final, sem recalibrar.
+  em 0,0) ao final, sem recalibrar. *Atenção especial ao eixo horizontal:* no modelo
+  de apontamento vertical (F4) ele deriva de `alpha`, que em giroscópio relativo é o
+  ângulo que mais escorrega — a deriva horizontal é o modo de falha esperado deste
+  caso.
 - **L9 — Estabilidade da mira (KPI-7)**: com o aparelho na mão, parado, observar a
   mira por 30 s: o tremor deve ser menor que o raio da hitbox do pato (sobrepor a
   mira a um pato-alvo estático de teste ou medir amplitude no overlay).
