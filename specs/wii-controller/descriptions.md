@@ -26,6 +26,27 @@
   usado para mira/direção). Deve ter zona morta configurável perto do centro,
   sensibilidade ajustável e saturação suave ao atingir o ângulo máximo.
 
+  **Apontar, não pilotar (o ponto central do "modo Wii").** A inclinação define a
+  **posição** da mira, não a velocidade dela. Apontar o aparelho para um lugar coloca
+  a mira naquele lugar; o centro calibrado corresponde ao centro da tela e o ângulo
+  máximo às bordas. Voltar o aparelho à posição neutra traz a mira de volta ao centro
+  — não apenas a faz parar onde estava. Essa é a diferença entre o Wii e um gamepad
+  comum, e é o que torna a mira intuitiva: tratar a inclinação como analógico de taxa
+  faz a mira sair à deriva e é impraticável de usar (verificado em teste real).
+
+  Consequência a assumir conscientemente: em jogos de terceiros, que interpretam o
+  analógico como taxa por convenção, a sensação continuará sendo de cursor por
+  velocidade. Isso é limitação conhecida, não defeito — jogos próprios consomem o
+  eixo como posição. Perfis de mapeamento (segunda onda) são o caminho para
+  terceiros.
+
+  **Ergonomia da mira.** Quanto o pulso precisa girar para varrer a tela inteira é
+  parâmetro de conforto e precisa de valor justificado; a suavização contra tremor não
+  pode custar resposta perceptível; e o sentido dos eixos (inclinar para a direita
+  leva a mira para a direita, e para cima leva para cima, com o aparelho em paisagem)
+  precisa estar correto e verificado — um sinal invertido é indistinguível de
+  "controle confuso".
+
 - **Calibração de centro**: comando explícito que define a posição atual do aparelho
   como o "zero" da inclinação. Necessário porque a posição neutra muda conforme o
   usuário está sentado, deitado ou em pé. Deve poder ser reexecutado a qualquer
@@ -84,6 +105,42 @@
   jogo real usa, escondendo justamente os problemas que o projeto precisa descobrir.
   Se a spec quiser um modo de leitura direta, que seja um modo secundário e explícito,
   usado só para medir quanto da latência total vem da camada de emulação.
+
+- **Segundo jogo: Fruit Ninja**: um jogo de cortar frutas arremessadas, rodando na
+  tela do PC como o Duck Shooting e sujeito às mesmas restrições arquiteturais (lê o
+  gamepad virtual, nunca o WebSocket; lógica pura separada do desenho; sem engine e
+  sem build).
+
+  **Por que este jogo, e não outro.** Ele existe para ser o segundo banco de prova do
+  apontamento, estressando-o de um jeito que o Duck Shooting não alcança:
+
+  1. **Corte é gesto contínuo, tiro é evento pontual.** No Duck Shooting a mira só
+     precisa estar no lugar certo no instante do disparo. Aqui o caminho percorrido
+     pela mira *é* a jogada — o rastro do corte. Isso expõe atraso, tremor e
+     descontinuidade de forma muito mais implacável.
+  2. **É o teste honesto do modelo de apontamento.** Se apontar funciona de verdade,
+     cortar uma fruta atravessando a tela é natural. Se a mira for por velocidade,
+     cortar é impossível — e a diferença é óbvia em segundos, sem instrumentação.
+  3. **Valida o controle sob movimento rápido**, enquanto o Duck Shooting valida sob
+     posicionamento fino. Juntos cobrem os dois regimes de uso.
+
+  Mecânica pretendida:
+  - Frutas são arremessadas de baixo para cima com trajetórias variadas; caem se não
+    cortadas.
+  - O corte acontece quando a mira atravessa a fruta **em movimento** — a velocidade
+    da mira faz parte do critério, não só a posição. Encostar parado não corta.
+  - Um rastro visível acompanha a mira, mostrando o traço do corte; é também o
+    feedback que revela a qualidade do apontamento.
+  - Bombas entre as frutas: cortar uma penalisa (perda de vida ou fim de partida).
+  - Cortar várias frutas num mesmo traço vale bônus — recompensa o gesto contínuo,
+    que é exatamente o que se quer testar.
+  - Vidas perdidas ao deixar frutas caírem; dificuldade crescente em quantidade e
+    velocidade de arremesso.
+  - Vibração ao cortar e ao errar, distinguíveis entre si.
+  - Áudio sintetizado, sem arquivos externos, como no Duck Shooting.
+
+  Sem persistência de recorde entre sessões (mesma regra do Duck Shooting) e sem arte
+  original — formas geométricas e cores bastam para o propósito.
 
 - **Instrumentação de latência**: um indicador opcional, ativável durante o jogo, que
   mostra a latência medida e a taxa de atualização em tempo real. Sem isso, os KPIs

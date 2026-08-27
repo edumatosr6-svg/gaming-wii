@@ -1,130 +1,91 @@
 # wii-controller — Implementation Report
 
-**Origem:** revisão humana após teste manual com hardware real (Galaxy A57 + PC
-Windows com ViGEmBus). Não veio de `FAIL SPEC` do `impl-tester`: a suíte
-automatizada passou integralmente (52 testes) em todas as rodadas.
+**Origem:** revisão humana após teste manual com hardware real. O ciclo anterior
+(cliente reconstruído, 63 testes) resolveu os defeitos de conexão e de acionamento: o
+controle conecta, os botões respondem, a calibração funciona. O produto passou a ser
+operável — e só então o defeito abaixo pôde ser percebido.
 
-**Estado do produto:** o software **não é utilizável**. O servidor, o protocolo e
-a emulação de gamepad estão corretos e verificados por medição direta. O cliente
-do celular está parcialmente funcional: a inclinação chega ao jogo (a mira se
-move), mas **nenhum botão touch e nem a calibração operam de forma confiável**.
-Sem calibrar e sem disparar, não há como jogar.
+**Veredito:** `FAIL SPEC`. Não é defeito de implementação: o código faz exatamente o
+que a spec descreve. A spec é que não define o comportamento certo.
 
-## O que a implementação revelou
+## O defeito: mirar é impraticável
 
-O ponto central: **todos os defeitos encontrados vivem na fronteira entre o
-código e o mundo real** — driver de gamepad, motor de renderização do navegador,
-semântica de eventos de toque do Chrome Android. Nenhum deles era detectável pela
-suíte automatizada, e nenhum deles tinha comportamento definido nas specs. A spec
-classificou 22 procedimentos como "verificação manual" mas **não descreveu o que
-deveria acontecer neles**, o que os deixou sem critério de aceite e sem forma de
-reprovar uma implementação errada.
+Relato do usuário em uso real: *"está muito difícil e confuso usar o controle, está
+impossível mirar"*.
 
-### 1. Integração com o driver do gamepad não é especificada além da presença
+**Causa raiz — o modelo de apontamento nunca foi especificado.** Em
+`game/js/loop.js`, a mira é integrada a partir do eixo:
 
-A biblioteca `vgamepad` valida a assinatura do callback de vibração comparando-a
-com um modelo **sem anotações de tipo**, e rejeita callbacks anotados. O servidor
-lançava `TypeError` na inicialização e não subia. A spec cobre a *ausência* do
-ViGEmBus, mas não o contrato de integração com ele quando está presente.
+```js
+crosshair.x + axisX * CROSSHAIR_SPEED * dt
+```
 
-**O que a spec precisa passar a definir:** o contrato de registro do callback de
-rumble e a exigência de que a inicialização do gamepad seja verificada com o
-driver real antes de o servidor se declarar pronto.
+Ou seja, a inclinação do aparelho define a **velocidade** com que a mira se desloca,
+não a **posição** dela. Inclinar não aponta: acelera. A mira continua andando enquanto
+o aparelho estiver inclinado, e voltar ao centro apenas a faz parar onde estiver — não
+a traz de volta. O usuário passa a perseguir um cursor à deriva em vez de apontar para
+um alvo.
 
-### 2. A troca de telas do cliente não tem comportamento especificado
+**Por que a implementação está correta em relação à spec.** F10 diz apenas que *"o
+analógico direito (alimentado pela inclinação) move a mira"*. "Move" é ambíguo, e a
+leitura escolhida — deflexão de analógico como taxa de deslocamento — é a convenção
+universal de gamepad, portanto a leitura mais razoável para quem implementa. Nada em
+`software-specs.md` diz que a inclinação deve mapear para **posição absoluta**.
 
-A seção do controle usa `display: flex`, que por precedência de CSS anula o
-`display: none` do atributo `hidden` usado pelo JavaScript para alternar as
-telas. A tela de pareamento nunca saía da frente, escondendo um controle que já
-estava conectado e funcionando.
+**Por que isso contradiz a intenção do produto.** O `descriptions.md` promete um
+controle *"no estilo Wii Remote"*, e apontar é a característica que define esse
+estilo — é a diferença entre o Wii e qualquer gamepad anterior. A spec preservou a
+letra (inclinação vira eixo analógico) e perdeu a intenção (inclinação vira mira).
 
-**O que a spec precisa passar a definir:** os estados visuais do cliente
-(pareamento, conectando, conectado, desconectado) como uma máquina de estados
-explícita, com o critério de aceite de que exatamente um estado é visível por
-vez.
+**Onde o defeito NÃO está.** O mapeamento no servidor (`mapping.py`) está correto e
+verificado: ângulo → valor de eixo em [-1, 1], com zona morta, sensibilidade e
+saturação. A calibração está correta. A emulação XInput está correta. O problema é
+exclusivamente a **interpretação** desse eixo pelo jogo.
 
-### 3. Falha silenciosa: o cliente não expõe o estado real da conexão
+## A tensão arquitetural que a spec precisa resolver
 
-Com o socket fechado, o envio de mensagens era descartado sem qualquer sinal ao
-usuário. A interface continuava respondendo ao toque enquanto nada saía do
-aparelho — o sintoma "conectou mas não funciona", que foi o mais caro de
-diagnosticar em toda a sessão.
+Apontamento absoluto e "qualquer jogo de terceiros funciona sem configuração" são
+objetivos que **não podem ser satisfeitos ao mesmo tempo pelo mesmo eixo**:
 
-**O que a spec precisa passar a definir:** proibição de descarte silencioso;
-estado da conexão sempre visível na tela; reconexão automática (a spec previa
-apenas reconexão manual, insuficiente quando a queda é invisível).
+- Um jogo de terceiros interpreta o analógico direito como taxa (convenção XInput).
+  Nada que o servidor faça muda isso — a semântica está do lado do jogo.
+- Um jogo nosso (Duck Shooting, e o novo Fruit Ninja) pode interpretar o mesmo valor
+  como **posição absoluta**, porque nós escrevemos a interpretação.
 
-### 4. Semântica de entrada touch não é especificada
+Portanto a spec deve declarar explicitamente: o eixo transporta uma **posição
+apontada** normalizada; jogos próprios a consomem como posição, e o comportamento em
+jogos de terceiros (cursor por taxa) é uma limitação conhecida e documentada — não um
+defeito. Perfis de mapeamento por jogo já estão previstos na segunda onda e são o
+caminho para tratar terceiros no futuro.
 
-Três defeitos distintos, todos com a mesma raiz — a spec descreve *quais* botões
-existem, mas não *como* a entrada por toque funciona:
+## Pontos secundários de conforto de mira (a spec não define critério)
 
-- **`click` não existe no controle.** O tratamento multi-touch chama
-  `preventDefault()` na área dos botões, o que impede o navegador de sintetizar
-  o evento `click`. O botão CALIBRAR era o único ligado a `click` e por isso
-  nunca disparava no celular (funcionaria no desktop com mouse — foi assim que
-  escapou da revisão).
-- **Elementos decorativos capturam o toque.** As faixas fixas de status e de
-  aviso atravessam a tela por cima da fileira de botões L/R e recebiam o toque
-  no lugar do botão.
-- **Pedir tela cheia cancela o toque em andamento.** O Chrome Android cancela a
-  sequência de toque ao entrar em fullscreen; um pedido de fullscreen disparado
-  no início do toque faz o `touchstart` do botão nunca ocorrer, engolindo o
-  aperto.
+Além do modelo, o usuário relata "confuso". Itens que a spec menciona mas sem meta
+verificável, e que devem ganhar critério:
 
-**O que a spec precisa passar a definir:** que todo controle da interface responde
-a eventos de toque (nunca a `click`); que nenhum elemento não-interativo pode
-interceptar toques destinados a botões; e em que momento do ciclo de vida o modo
-imersivo é solicitado, dado que o navegador exige gesto do usuário e cancela
-toques durante a transição.
-
-### 5. As specs de teste não cobrem a camada de interação
-
-`tests/client-controller.md` especifica a lógica pura do rastreador de toques
-(que sempre passou), mas nada sobre a integração dessa lógica com o DOM real: se
-o evento chega ao elemento certo, se a mensagem sai pelo socket, se a tela
-correta está visível. É exatamente essa faixa não coberta que concentrou 100% dos
-defeitos.
-
-**O que a spec precisa passar a definir:** casos de teste de integração da
-interface, executáveis em navegador headless, cobrindo toque → mensagem enviada,
-e os procedimentos manuais com critérios de aceite observáveis (o que o operador
-deve ver, não apenas o que deve fazer).
-
-## Correções já aplicadas no código
-
-Aplicadas durante a revisão manual, sem passar pelo `impl-loop`. Devem ser
-tratadas como estado de partida, não como solução definitiva — o comportamento
-que elas assumem precisa ser ratificado pelas specs atualizadas:
-
-| Arquivo | Correção |
-|---|---|
-| `server/gamepad/windows.py` | callback de rumble registrado sem anotações de tipo |
-| `web/css/style.css` | `[hidden]` com `display: none !important`; `overscroll-behavior: none`; faixas com `pointer-events: none` |
-| `web/js/main.js` | conexão automática pelo endereço da própria URL; reconexão automática; estado e código de queda visíveis; fullscreen movido para `touchend` e uma única vez; calibração por `touchstart` |
-| `web/js/controls.js` | botão identificado por `touch.target` no início do toque |
-| `web/js/connection.js` | código e razão do fechamento propagados ao chamador |
-
-## Verificações feitas por medição direta
-
-Para separar o que está certo do que está quebrado, sem suposição:
-
-- Cliente WebSocket simulado: 97 mensagens de movimento a 60 Hz mais botões — a
-  sessão sobrevive, o servidor não derruba.
-- Leitura do estado real do gamepad virtual via XInput: botão A produz
-  `wButtons=4096`; soltar volta a `0`; movimento move os eixos do analógico
-  direito.
-- Calibração via XInput: após o comando, a mesma inclinação passa a ler `(0, 0)`
-  e inclinar além dela volta a mover os eixos.
-
-**Conclusão:** servidor, protocolo, mapeamento, emulação de gamepad e calibração
-estão corretos. Todo o defeito remanescente está no cliente web e na ausência de
-especificação da camada de interação.
+- `MAX_ANGLE_DEG = 30.0` define a inclinação para atingir o extremo. Com apontamento
+  absoluto, esse valor passa a determinar **quanto o pulso precisa girar para varrer a
+  tela inteira** — vira um parâmetro de ergonomia, não de ganho, e precisa de critério
+  observável.
+- `SMOOTHING_ALPHA = 0.2` reduz tremor mas adiciona atraso. Com apontamento absoluto o
+  atraso é percebido diretamente como "a mira não obedece". Precisa de meta que
+  equilibre tremor (KPI-7) e resposta (KPI-1).
+- A relação entre eixo horizontal/vertical e os ângulos do aparelho em paisagem não
+  tem critério de "sentido correto": inversão de sinal em um dos eixos produz
+  exatamente a sensação de controle "confuso" e nenhum teste atual reprovaria isso.
 
 ## Pedido para o spec-loop
 
-Atualizar as specs para que a camada de interação do cliente deixe de ser
-território não especificado: máquina de estados visuais, semântica de entrada por
-toque, política de falha visível e reconexão, contrato de integração com o driver,
-e specs de teste que cubram essa faixa — incluindo critérios de aceite
-observáveis para os procedimentos manuais.
+1. Definir o **modelo de apontamento** como requisito de primeira classe: a inclinação
+   mapeia para posição absoluta da mira, com o centro calibrado correspondendo ao
+   centro da tela e o ângulo máximo às bordas. Incluir critério de aceite verificável
+   e caso de teste (mesma inclinação ⇒ mesma posição da mira, independentemente do
+   histórico de movimento — que é precisamente o que a implementação por velocidade
+   viola).
+2. Resolver e documentar a tensão com jogos de terceiros.
+3. Dar critério observável aos parâmetros de ergonomia acima, incluindo o sentido dos
+   eixos.
+4. Especificar o novo jogo **Fruit Ninja** (ver `descriptions.md`), cujo valor
+   principal é ser um segundo banco de prova do modelo de apontamento — corte por
+   gesto contínuo estressa o apontamento de forma diferente do tiro pontual do Duck
+   Shooting.
