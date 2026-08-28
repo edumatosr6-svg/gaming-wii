@@ -38,14 +38,16 @@ def test_suite_js_via_node():
 
 
 def _game_js_files() -> list[Path]:
-    """Só o Duck Shooting (`game/js`).
+    """Só o Duck Shooting (`game/duck-shooting/js`).
 
     As checagens G13/G14/G6 abaixo são regras do slug `wii-controller`. Varrer
     `game/**` fazia elas alcançarem `game/fruit-ninja/`, que tem regras próprias
     (X1–X12, em `tests/test_fruit_ninja_static.py`) e cuja exceção de `fetch` é
-    `js/rumble.js`, não `rumble-fallback.js`.
+    `js/rumble.js`, não `rumble-fallback.js`. Desde o game-hub (migração de
+    pasta), o Duck Shooting vive em `game/duck-shooting/`, não mais `game/`
+    diretamente — `game/index.html` agora é o hub.
     """
-    return sorted((ROOT / "game" / "js").rglob("*.js"))
+    return sorted((ROOT / "game" / "duck-shooting" / "js").rglob("*.js"))
 
 
 def test_g13_sem_websocket_de_input_no_jogo():
@@ -55,7 +57,7 @@ def test_g13_sem_websocket_de_input_no_jogo():
         # nenhuma construção de WebSocket em módulo algum do jogo
         assert not re.search(r"new\s+WebSocket", text), f"WebSocket de input em {path}"
     # input vem só da Gamepad API
-    input_js = (ROOT / "game" / "js" / "input.js").read_text(encoding="utf-8")
+    input_js = (ROOT / "game" / "duck-shooting" / "js" / "input.js").read_text(encoding="utf-8")
     assert "navigator.getGamepads" in input_js
     # fetch fora do overlay de métricas só no módulo isolado de fallback
     for path in _game_js_files():
@@ -63,7 +65,7 @@ def test_g13_sem_websocket_de_input_no_jogo():
         if path.name in ("rumble-fallback.js", "loop.js"):
             continue  # fallback documentado (F8.3) e leitura de /metrics (F11)
         assert "fetch(" not in text, f"acesso HTTP inesperado em {path}"
-    fallback = (ROOT / "game" / "js" / "rumble-fallback.js").read_text(encoding="utf-8")
+    fallback = (ROOT / "game" / "duck-shooting" / "js" / "rumble-fallback.js").read_text(encoding="utf-8")
     assert "POR QUE ESTE MÓDULO EXISTE" in fallback  # comentário explicativo exigido
 
 
@@ -303,7 +305,7 @@ def test_g20_static_mira_nao_integra_velocidade_no_consumidor():
     caso reprova — a invariante do GameState (`crosshair` é função da leitura
     ATUAL do eixo, nunca do valor anterior) vive no consumidor também.
     """
-    loop_js = (ROOT / "game" / "js" / "loop.js").read_text(encoding="utf-8")
+    loop_js = (ROOT / "game" / "duck-shooting" / "js" / "loop.js").read_text(encoding="utf-8")
 
     # A mira tem de vir da função pura de posição absoluta.
     assert (

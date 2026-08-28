@@ -13,7 +13,7 @@ import {
   MAX_AMMO,
   BASE_HIT_POINTS,
   STREAK_BONUS_STEP,
-} from '../../game/js/rules.js';
+} from '../../game/duck-shooting/js/rules.js';
 import {
   createRng,
   spawnDucks,
@@ -25,9 +25,9 @@ import {
   DUCK_RADIUS,
   WORLD,
   VEGETATION_BAND,
-} from '../../game/js/entities.js';
-import { crosshairFromAxes } from '../../game/js/aim.js';
-import { normalizeGamepadAxes } from '../../game/js/input.js';
+} from '../../game/duck-shooting/js/entities.js';
+import { crosshairFromAxes } from '../../game/duck-shooting/js/aim.js';
+import { normalizeGamepadAxes } from '../../game/duck-shooting/js/input.js';
 
 const PARAMS = difficultyForRound(1);
 

@@ -185,6 +185,64 @@ def test_c7_driver_ausente(monkeypatch, capsys):
     assert "https://" in err
 
 
+def test_c6b_qr_decodifica_para_url_impressa(tmp_path):
+    """C6b: o QR gerado decodifica de volta para a URL exata (F1.6/F1.7)."""
+    from PIL import Image
+    from pyzbar.pyzbar import decode as zbar_decode
+
+    from server import qr
+
+    url = "https://192.168.1.23:8443/"
+    image_path = tmp_path / "qr1.png"
+    assert qr.generate_and_print(url, fmt="image", image_path=image_path) is True
+    decoded = zbar_decode(Image.open(image_path))
+    assert len(decoded) == 1
+    assert decoded[0].data.decode() == url
+
+    # --port diferente / segunda interface simulada: o novo QR reflete o novo
+    # IP:porta, nunca o do start anterior (F1.7).
+    url2 = "https://10.0.0.9:9000/"
+    image_path2 = tmp_path / "qr2.png"
+    assert qr.generate_and_print(url2, fmt="image", image_path=image_path2) is True
+    decoded2 = zbar_decode(Image.open(image_path2))
+    assert decoded2[0].data.decode() == url2
+    assert decoded2[0].data.decode() != url
+
+
+def test_c6c_sem_chamada_de_rede_para_gerar_qr(monkeypatch):
+    """C6c: bloquear conexões de socket não impede a geração do QR (F1.8)."""
+    import socket
+
+    from server import qr
+
+    def _blocked_connect(self, *_args, **_kwargs):
+        raise OSError("rede bloqueada no teste (C6c)")
+
+    monkeypatch.setattr(socket.socket, "connect", _blocked_connect)
+    assert qr.generate_and_print("https://192.168.1.5:8443/", fmt="ascii") is True
+
+
+def test_c6d_falha_no_qr_nao_derruba_o_servidor(monkeypatch, capsys):
+    """C6d: QR forçado a falhar degrada suave — servidor continua de pé (F1.9)."""
+    from server import qr
+
+    def _boom(_url: str):
+        raise RuntimeError("biblioteca de QR indisponível (forçado no teste)")
+
+    monkeypatch.setattr(qr, "_build_qr", _boom)
+    assert qr.generate_and_print("https://192.168.1.5:8443/") is False
+    output = capsys.readouterr().out
+    assert "AVISO" in output
+    assert "QR" in output
+
+    from server.main import print_urls
+
+    print_urls(8443)
+    output2 = capsys.readouterr().out
+    assert "https://" in output2
+    assert "AVISO" in output2
+
+
 # ------------------------------------------------------ manuais / hardware
 
 
@@ -201,3 +259,13 @@ def test_c9_tempo_de_reconexao_kpi5_manual():
 @pytest.mark.hardware
 def test_c10_estabilidade_de_sessao_kpi11_manual():
     pytest.skip("Procedimento manual C10 (KPI-11): 30 min de sessão sem queda")
+
+
+@pytest.mark.hardware
+def test_c11_pareamento_qr_vs_manual_kpi25_manual():
+    pytest.skip(
+        "Procedimento manual C11 (KPI-25): cronometrar (a) QR escaneado até "
+        "'conectado' e (b) IP digitado manualmente até 'conectado'; (a) deve "
+        "ficar < 10s e ser perceptivelmente mais rápido que (b); ambos os "
+        "caminhos continuam disponíveis durante o teste."
+    )

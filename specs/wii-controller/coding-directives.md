@@ -35,15 +35,17 @@ wii-controller/
 │       ├── motion.js      # leitura e throttle do giroscópio
 │       ├── controls.js    # botões touch, multi-touch
 │       └── haptics.js     # vibração
-├── game/                  # Duck Shooting — servido para o navegador do PC
-│   ├── index.html
-│   ├── js/
-│   │   ├── input.js       # leitura do gamepad virtual via Gamepad API
-│   │   ├── entities.js    # patos: spawn, trajetória, colisão (puro, testável)
-│   │   ├── rules.js       # munição, rodadas, pontuação (puro, testável)
-│   │   ├── render.js      # desenho em Canvas 2D
-│   │   └── loop.js        # game loop, timing, instrumentação de latência
-│   └── assets/            # sprites placeholder e sons
+├── game/                  # hub de jogos + Duck Shooting — servidos para o navegador do PC
+│   ├── index.html         # hub: lista de jogos (game-hub), não mais o Duck Shooting
+│   └── duck-shooting/
+│       ├── index.html
+│       ├── js/
+│       │   ├── input.js       # leitura do gamepad virtual via Gamepad API
+│       │   ├── entities.js    # patos: spawn, trajetória, colisão (puro, testável)
+│       │   ├── rules.js       # munição, rodadas, pontuação (puro, testável)
+│       │   ├── render.js      # desenho em Canvas 2D
+│       │   └── loop.js        # game loop, timing, instrumentação de latência
+│       └── assets/            # sprites placeholder e sons
 ├── tests/
 ├── requirements.txt
 └── README.md

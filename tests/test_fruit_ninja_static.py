@@ -76,6 +76,13 @@ def test_x5_sem_imports_externos():
 
     html = _read(GAME / "index.html")
     for alvo in re.findall(r"(?:src|href)=\"([^\"]+)\"", html):
+        if alvo == "../index.html":
+            # Exceção deliberada (specs/game-hub, F3): o link de "voltar ao
+            # hub" navega para fora de game/fruit-ninja/ por natureza — é
+            # navegação de página real, não um import de módulo/asset do
+            # jogo. Continua proibido qualquer OUTRO recurso externo.
+            assert (GAME / alvo).resolve().is_file(), "back-to-hub aponta para arquivo inexistente"
+            continue
         assert alvo.startswith("./"), f"index.html referencia recurso externo: {alvo}"
         assert (GAME / alvo).resolve().is_file(), f"index.html: recurso inexistente {alvo}"
 

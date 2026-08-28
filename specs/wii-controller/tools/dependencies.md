@@ -10,6 +10,7 @@ sem CDN, sem npm) — restrição das coding directives.
 | `websockets` | Canal WebSocket assíncrono de input (F1). Referência indicada em references/. | Usar o servidor asyncio nativo da lib; suporta TLS (`wss://`) exigido pela estratégia de contexto seguro. |
 | `vgamepad` | Binding Python do ViGEmBus para o gamepad virtual XInput (F7). | Importado **apenas** em `server/gamepad/windows.py`. Exige o driver ViGEmBus instalado no Windows (pré-requisito de usuário, documentado no README; ausência detectada com mensagem acionável — F7.2). |
 | `cryptography` | Gerar o certificado autoassinado no primeiro start (F1, estratégia HTTPS). | Alternativa aceitável: gerar via `openssl` externo com instrução no README, se preferir zero dependência — a spec exige apenas que o certificado seja gerado/reutilizado automaticamente ou com passo único documentado. |
+| `qrcode` (ou biblioteca Python equivalente, ex. `segno`) | Renderizar o QR code de pareamento (F1) a partir da URL do controle — ASCII no terminal ou imagem local, à escolha do impl-loop. | **Geração 100% local/offline**: a biblioteca calcula e desenha o QR em processo, sem chamada de rede a gerador de terceiros — é o requisito explícito do `descriptions.md` ("sem serviço externo"). Se a biblioteca escolhida oferecer saída ASCII nativa, prefira-a para o modo terminal; para o modo imagem, qualquer biblioteca de imagem pura Python (sem dependência de sistema além de `Pillow`, se necessário) serve. |
 
 Servidor HTTP estático: usar a biblioteca padrão (`http.server`/`asyncio` ou o handler
 HTTP do próprio `websockets` para a mesma porta). **Sem framework web** (FastAPI, Flask
@@ -58,4 +59,6 @@ requisito, não coincidência:
 
 Frameworks de frontend, bundlers, engines de jogo (Phaser/PixiJS/Three.js), frameworks
 web Python pesados, bibliotecas de jogo no cliente, qualquer asset de terceiros com
-licença restritiva.
+licença restritiva. **Nenhum serviço web de geração de QR code** (ex. API de terceiros
+que recebe a URL e devolve uma imagem) — o QR do F1 é gerado localmente pela biblioteca
+Python do servidor, nunca por uma chamada de rede a um gerador externo.

@@ -2,6 +2,9 @@
 websockets>=13.0
 vgamepad>=0.1.0; sys_platform == "win32"
 cryptography>=42.0
+# QR code de pareamento (F1): geração 100% local/offline, sem serviço de
+# terceiros. `[pil]` traz Pillow, usado apenas quando QR_FORMAT="image".
+qrcode[pil]>=7.4
 
 # Desenvolvimento/teste (tools/tooling.md)
 pytest>=8.0
@@ -11,3 +14,6 @@ black>=24.0
 # Testes de integração em navegador headless (W11–W19), obrigatórios na suíte
 # padrão. Depois do pip install, rode o passo único: playwright install chromium
 playwright>=1.44
+# Decodificação de QR nos testes automatizados (C6b/C6c): confirma que o QR
+# gerado decodifica de volta para a URL exata, sem depender de leitura visual.
+pyzbar>=0.1.9

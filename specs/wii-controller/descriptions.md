@@ -28,6 +28,21 @@
 - **Pareamento por IP**: tela inicial onde o usuário informa o IP do PC. O último IP
   usado é lembrado no dispositivo para que reconexões futuras sejam de um toque só.
 
+- **QR code de pareamento (revisão humana — atalho para digitar o IP)**: hoje o
+  usuário precisa ler o IP no terminal do servidor e digitá-lo no celular, o que é
+  atrito e fonte de erro de digitação. O servidor passa a exibir, junto às URLs
+  impressas no terminal, um **QR code** (renderizado como ASCII/terminal ou como
+  imagem, à escolha do impl-loop) que codifica a URL completa do controle
+  (`https://<ip-local>:<porta>/`). O usuário aponta a câmera do celular para o QR
+  code e o navegador abre a página do controle direto, sem digitar nada — o campo
+  de IP manual continua existindo como alternativa (rede sem câmera disponível,
+  celular já pareado antes, etc.), nunca é substituído por completo.
+  - Deve ser regerado corretamente se a porta ou o IP mudarem (múltiplas interfaces
+    de rede, por exemplo) — o mesmo texto que aparece nas URLs impressas.
+  - Sem serviço externo: a geração do QR code é local (biblioteca/algoritmo
+    embutido), sem chamada de rede a gerador de QR de terceiros — mesma regra de
+    "sem dependência de internet" do resto do projeto.
+
 - **Controle por apontamento (o "modo Wii") — a metáfora do infravermelho**:
   leitura contínua do giroscópio / orientação do aparelho, **com o celular na
   vertical**. O modelo mental oferecido ao usuário é este: **finja que existe um
