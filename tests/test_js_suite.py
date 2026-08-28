@@ -100,8 +100,13 @@ def test_w4_sem_dependencias_externas_manual():
 
 
 @hardware
-def test_w5_fullscreen_paisagem_manual():
-    pytest.skip("Procedimento manual W5: fullscreen + paisagem no A57")
+def test_w5_fullscreen_retrato_manual():
+    """W5 - pegada vertical (F2.2). Observar: apos o toque inicial, a barra do
+    navegador some, a tela permanece em RETRATO mesmo girando o aparelho para
+    apontar, e gestos de scroll/zoom/duplo-toque nao movem nem redimensionam
+    a interface.
+    """
+    pytest.skip("Procedimento manual W5: fullscreen + retrato (aparelho em pe) no A57")
 
 
 @hardware
@@ -139,11 +144,32 @@ def test_w20_sessao_jogavel_fim_a_fim_manual():
     """W20 / KPI-13 — critério de "o produto funciona". Sem caminho automatizável.
 
     Observar: com o servidor no ar e o Duck Shooting aberto no PC, jogar uma
-    rodada completa usando apenas o celular — a mira acompanha a inclinação, o
-    botão A dispara, a calibração recentraliza e nenhum controle fica inerte
-    durante a partida.
+    rodada completa usando apenas o celular, SEGURANDO-O EM PE COMO UM WII
+    REMOTE — a mira esta onde a ponta do aparelho aponta (apontar para um canto
+    leva a mira ao canto; voltar ao neutro RECENTRA a mira, ela nunca fica "a
+    deriva"), o botao A dispara, a calibracao recentraliza e nenhum controle
+    fica inerte durante a partida.
     """
     pytest.skip("Procedimento manual W20 (KPI-13): partida completa só com o celular")
+
+
+@hardware
+def test_w22m_ergonomia_e_sentido_do_apontamento_manual():
+    """W22m / KPI-18 - o fio que so o hardware fecha (F4, pegada vertical).
+
+    Observar, com o jogo aberto e o aparelho calibrado em pe:
+    (a) apontar a ponta para a DIREITA move a mira para a DIREITA; esquerda,
+        esquerda; LEVANTAR a ponta move a mira para CIMA; abaixar, baixo -
+        4/4 direcoes corretas, sem nenhuma inversao;
+    (b) varrer a mira de uma borda a outra e possivel SO com o giro do pulso,
+        sem mover o cotovelo (MAX_ANGLE_DEG padrao de 20 graus - se exigir o
+        braco, o parametro reprova);
+    (c) torcer o aparelho no proprio eixo (ponta fixa) NAO desloca a mira
+        perceptivelmente;
+    (d) a mira responde sem atraso perceptivel - a suavizacao padrao nao pode
+        ser sentida como borracha.
+    """
+    pytest.skip("Procedimento manual W22m (KPI-18): sentido e ergonomia com sensor real")
 
 
 @hardware
@@ -156,3 +182,31 @@ def test_e10_inicializacao_com_driver_real_manual():
     inspeciona em tempo de execução.
     """
     pytest.skip("Procedimento manual E10 (KPI-15): subir o servidor com o driver real")
+
+
+def test_g20_static_mira_nao_integra_velocidade_no_consumidor():
+    """G20/KPI-16 (estático): o consumidor da mira não reintroduz velocidade.
+
+    Complementa os testes puros G20–G21, que medem `aim.js`. Verificado por
+    mutação: reintroduzir `crosshair.x + eixo * ganho * dt` em `loop.js`
+    mantinha G20/G21 passando (eles só enxergam a função pura), e apenas este
+    caso reprova — a invariante do GameState (`crosshair` é função da leitura
+    ATUAL do eixo, nunca do valor anterior) vive no consumidor também.
+    """
+    loop_js = (ROOT / "game" / "js" / "loop.js").read_text(encoding="utf-8")
+
+    # A mira tem de vir da função pura de posição absoluta.
+    assert (
+        "crosshairFromAxes(" in loop_js
+    ), "loop.js não deriva a mira da função pura de posição absoluta (F10.7)"
+
+    # E não pode se realimentar da posição anterior.
+    realimentacao = re.compile(
+        r"crosshair\s*\.\s*[xy]\s*[-+]|[-+]=\s*[^;\n]*\baxis[XY]\b|"
+        r"\bstate\s*\.\s*crosshair\s*\.\s*[xy]\s*\+",
+    )
+    ofensas = [line.strip() for line in loop_js.splitlines() if realimentacao.search(line)]
+    assert ofensas == [], (
+        "a posição da mira se realimenta da posição anterior (integração de "
+        f"velocidade) — proibido por F10.7/KPI-16: {ofensas}"
+    )

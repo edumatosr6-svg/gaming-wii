@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMotionThrottle, buildMotionMessage, adjustForLandscape } from '../../web/js/motion.js';
+import { createMotionThrottle, buildMotionMessage } from '../../web/js/motion.js';
 import { createButtonTracker, buildButtonMessage, BUTTON_IDS } from '../../web/js/controls.js';
 import { patternFor } from '../../web/js/haptics.js';
 import { wsUrl } from '../../web/js/connection.js';
@@ -13,7 +13,7 @@ test('W1: throttle de motion mantém a taxa entre 50 e 70 Hz', () => {
   const emitted = [];
   // eventos a ~200 Hz (5 ms) por 2 s simulados
   for (let now = 0; now <= 2000; now += 5) {
-    const out = throttle.push(buildMotionMessage(1, 2, now), now);
+    const out = throttle.push(buildMotionMessage(0, 1, 2, now), now);
     if (out !== null) {
       emitted.push(now);
     }
@@ -68,12 +68,20 @@ test('W2: dois dedos no mesmo botão geram um down e um up no total', () => {
 });
 
 test('W3: formato das mensagens bate com o protocolo', () => {
-  const motion = buildMotionMessage(12.5, -3, 1000);
-  assert.deepEqual(Object.keys(motion).sort(), ['b', 'g', 't', 'type']);
+  // Pegada vertical (F4): a mensagem carrega os TRES angulos, porque a
+  // direcao da ponta so e derivavel com alpha, beta e gamma.
+  const motion = buildMotionMessage(137, 12.5, -3, 1000);
+  assert.deepEqual(Object.keys(motion).sort(), ['a', 'b', 'g', 't', 'type']);
   assert.equal(motion.type, 'motion');
+  assert.equal(motion.a, 137);
   assert.equal(typeof motion.b, 'number');
   assert.equal(typeof motion.g, 'number');
   assert.equal(typeof motion.t, 'number');
+
+  // `a: null` quando o sensor nao reporta yaw (contrato do protocolo, M8b).
+  assert.equal(buildMotionMessage(null, 1, 2, 3).a, null);
+  assert.equal(buildMotionMessage(undefined, 1, 2, 3).a, null);
+  assert.equal(buildMotionMessage(NaN, 1, 2, 3).a, null);
 
   const button = buildButtonMessage('lb', false);
   assert.deepEqual(Object.keys(button).sort(), ['down', 'id', 'type']);
@@ -99,10 +107,16 @@ test('haptics: intensidade 0 cancela; padrão proporcional (F8.2)', () => {
   assert.deepEqual(patternFor(-1, 100), []);
 });
 
-test('conexão: URL wss e ajuste de paisagem', () => {
+test('conexão: URL wss derivada do endereço', () => {
   assert.equal(wsUrl('192.168.0.10', '8443'), 'wss://192.168.0.10:8443/ws');
-  const primary = adjustForLandscape(10, 20, 'landscape-primary');
-  const secondary = adjustForLandscape(10, 20, 'landscape-secondary');
-  assert.deepEqual(primary, { b: 20, g: -10 });
-  assert.deepEqual(secondary, { b: -20, g: 10 });
+});
+
+// Pegada vertical (F4): o cliente envia a amostra CRUA e o servidor deriva a
+// direcao da ponta. Um ajuste de eixo no cliente reintroduziria o mapeamento
+// de paisagem — trocado/invertido na pegada vertical.
+test('motion: cliente não reorienta os ângulos (mapeamento vive no servidor)', () => {
+  const motion = buildMotionMessage(30, 40, 50, 1);
+  assert.equal(motion.a, 30);
+  assert.equal(motion.b, 40);
+  assert.equal(motion.g, 50);
 });

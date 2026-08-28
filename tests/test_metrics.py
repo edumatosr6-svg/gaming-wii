@@ -22,7 +22,7 @@ async def test_l1_get_metrics(live_server):
     _app, port, _pad = live_server
     ws = await _connect(port)
     await asyncio.wait_for(ws.recv(), timeout=2)  # hello (sessão ativa)
-    await ws.send(json.dumps({"type": "motion", "b": 5, "g": 5, "t": 1}))
+    await ws.send(json.dumps({"type": "motion", "a": 5, "b": 5, "g": 5, "t": 1}))
     await asyncio.sleep(0.1)
 
     def fetch() -> dict:
@@ -63,7 +63,7 @@ async def test_l2_taxa_de_amostras_kpi2(live_server):
     # 60 Hz em lotes de 6 a cada 100 ms (sleep fino é impreciso no Windows)
     for _ in range(20):  # 2 s
         for i in range(6):
-            await ws.send(json.dumps({"type": "motion", "b": 5, "g": float(i), "t": 1}))
+            await ws.send(json.dumps({"type": "motion", "a": 5, "b": 5, "g": float(i), "t": 1}))
         await asyncio.sleep(0.1)
 
     def fetch() -> dict:
@@ -82,7 +82,7 @@ async def test_l3_custo_zero_com_overlay_desligado(live_server):
     ws = await _connect(port)
     await asyncio.wait_for(ws.recv(), timeout=2)  # hello
     for i in range(30):
-        await ws.send(json.dumps({"type": "motion", "b": i, "g": 0, "t": i}))
+        await ws.send(json.dumps({"type": "motion", "a": 0, "b": i, "g": 0, "t": i}))
     await asyncio.sleep(0.3)
     # sem leitura de /metrics: as únicas mensagens do servidor são ping (e o
     # hello já consumido) — nenhuma mensagem de medição por amostra

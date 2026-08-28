@@ -22,7 +22,9 @@ from server.protocol import (
 
 
 def test_p1_mensagens_validas():
-    assert parse_message('{"type":"motion","b":1.5,"g":-2.0,"t":123.0}') == Motion(1.5, -2.0, 123.0)
+    assert parse_message('{"type":"motion","a":10.0,"b":1.5,"g":-2.0,"t":123.0}') == Motion(
+        10.0, 1.5, -2.0, 123.0
+    )
     assert parse_message('{"type":"button","id":"a","down":true}') == Button("a", True)
     assert parse_message('{"type":"calibrate"}') == Calibrate()
     assert parse_message('{"type":"pong","t":9.0}') == Pong(9.0)
@@ -40,20 +42,24 @@ def test_p3_type_desconhecido():
 
 
 def test_p4_campos_ausentes():
-    assert parse_message('{"type":"motion","g":1,"t":2}') is None
-    assert parse_message('{"type":"motion","b":1,"t":2}') is None
-    assert parse_message('{"type":"motion","b":1,"g":2}') is None
+    assert parse_message('{"type":"motion","a":0,"g":1,"t":2}') is None
+    assert parse_message('{"type":"motion","a":0,"b":1,"t":2}') is None
+    assert parse_message('{"type":"motion","a":0,"b":1,"g":2}') is None
     assert parse_message('{"type":"button","down":true}') is None
     assert parse_message('{"type":"button","id":"a"}') is None
     assert parse_message('{"type":"pong"}') is None
 
 
 def test_p5_tipos_errados():
-    assert parse_message('{"type":"motion","b":"x","g":1,"t":2}') is None
-    assert parse_message('{"type":"motion","b":null,"g":1,"t":2}') is None
+    assert parse_message('{"type":"motion","a":0,"b":"x","g":1,"t":2}') is None
+    assert parse_message('{"type":"motion","a":0,"b":null,"g":1,"t":2}') is None
+    # `a` com tipo errado degrada para None (nao derruba a amostra): o eixo
+    # horizontal fica neutro e o vertical continua funcional (M8b/F4.4).
+    degradada = parse_message('{"type":"motion","a":"x","b":1,"g":2,"t":3}')
+    assert degradada == Motion(None, 1.0, 2.0, 3.0)
     assert parse_message('{"type":"button","id":"a","down":1}') is None
     assert parse_message('{"type":"button","id":5,"down":true}') is None
-    assert parse_message('{"type":"motion","b":true,"g":1,"t":2}') is None
+    assert parse_message('{"type":"motion","a":0,"b":true,"g":1,"t":2}') is None
 
 
 def test_p6_button_id_fora_do_enum():
@@ -62,7 +68,7 @@ def test_p6_button_id_fora_do_enum():
 
 
 def test_p7_payload_gigante():
-    huge = '{"type":"motion","b":1,"g":2,"t":3,"pad":"' + "x" * (1024 * 1024) + '"}'
+    huge = '{"type":"motion","a":0,"b":1,"g":2,"t":3,"pad":"' + "x" * (1024 * 1024) + '"}'
     assert parse_message(huge) is None
 
 
@@ -72,10 +78,14 @@ def test_w3_formato_das_mensagens_do_cliente():
     Espelha exatamente os objetos construídos por web/js/motion.js
     (buildMotionMessage) e web/js/controls.js (buildButtonMessage).
     """
-    client_motion = {"type": "motion", "b": 12.5, "g": -3.0, "t": 1000.0}
+    client_motion = {"type": "motion", "a": 137.0, "b": 12.5, "g": -3.0, "t": 1000.0}
     client_button = {"type": "button", "id": "lb", "down": False}
-    assert parse_message(json.dumps(client_motion)) == Motion(12.5, -3.0, 1000.0)
+    assert parse_message(json.dumps(client_motion)) == Motion(137.0, 12.5, -3.0, 1000.0)
     assert parse_message(json.dumps(client_button)) == Button("lb", False)
+
+    # `a: null` e valido (sensor sem yaw) - excecao documentada em P4.
+    sem_alpha = {"type": "motion", "a": None, "b": 12.5, "g": -3.0, "t": 1000.0}
+    assert parse_message(json.dumps(sem_alpha)) == Motion(None, 12.5, -3.0, 1000.0)
 
 
 # ------------------------------------------------- integração em loopback
@@ -120,7 +130,9 @@ async def test_p9_corpus_de_fuzzing(live_server):
             if i % 10 == 0:  # intercala válidas
                 await ws.send(json.dumps({"type": "button", "id": "a", "down": True}))
                 await ws.send(json.dumps({"type": "button", "id": "a", "down": False}))
-        await ws.send(json.dumps({"type": "motion", "b": config.MAX_ANGLE_DEG, "g": 0, "t": 1}))
+        await ws.send(
+            json.dumps({"type": "motion", "a": 0, "b": config.MAX_ANGLE_DEG, "g": 0, "t": 1})
+        )
         await asyncio.sleep(0.2)
         # servidor vivo e processando as válidas (KPI-9: 0 crashes)
         assert pad.axes[config.TILT_TARGET_AXIS][1] != 0.0
@@ -130,14 +142,37 @@ async def test_p9_corpus_de_fuzzing(live_server):
 
 
 async def test_p10_fluxo_motion_estado(live_server):
+    """P10: motion (a, b, g, t) vira posicao apontada absoluta no gamepad fake.
+
+    Fio de ponta a ponta sem driver real: ponta girada ao maximo para a
+    DIREITA (alpha negativo) satura o eixo horizontal em +1.0, e a rolagem
+    (g) nao interfere (F4.6/F4.7).
+    """
     _app, port, pad = live_server
     async with await _connect(port) as ws:
         await _recv_hello(ws)
-        await ws.send(json.dumps({"type": "motion", "b": 0, "g": config.MAX_ANGLE_DEG, "t": 1}))
+        await ws.send(
+            json.dumps({"type": "motion", "a": -config.MAX_ANGLE_DEG, "b": 0, "g": 45.0, "t": 1})
+        )
         await asyncio.sleep(0.15)
         x, y = pad.axes[config.TILT_TARGET_AXIS]
         assert x == pytest.approx(1.0)
         assert y == pytest.approx(0.0)
+
+        # Levantar a ponta leva o eixo vertical ao maximo (y positivo = cima).
+        # A sessao aplica a suavizacao padrao, entao o degrau e alimentado com
+        # amostras a 60 Hz como faz o cliente real (orcamento do KPI-17: 90%
+        # do valor final em <= 6 amostras).
+        for i in range(6):
+            await ws.send(
+                json.dumps(
+                    {"type": "motion", "a": 0, "b": config.MAX_ANGLE_DEG, "g": 0, "t": 2 + i}
+                )
+            )
+        await asyncio.sleep(0.2)
+        x2, y2 = pad.axes[config.TILT_TARGET_AXIS]
+        assert y2 >= 0.9, f"eixo vertical nao respondeu ao degrau: {y2}"
+        assert x2 == pytest.approx(0.0, abs=0.05)
 
 
 async def test_p11_fluxo_button_estado(live_server):

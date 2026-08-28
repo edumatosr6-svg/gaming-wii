@@ -26,6 +26,8 @@ import {
   WORLD,
   VEGETATION_BAND,
 } from '../../game/js/entities.js';
+import { crosshairFromAxes } from '../../game/js/aim.js';
+import { normalizeGamepadAxes } from '../../game/js/input.js';
 
 const PARAMS = difficultyForRound(1);
 
@@ -186,4 +188,109 @@ test('G12: mesma semente → mesmas trajetórias', () => {
   assert.deepEqual(a, b);
   const c = spawnDucks(PARAMS, createRng(100));
   assert.notDeepEqual(a, c);
+});
+
+// ---------------------------------------------------------------------------
+// G20–G23: mira absoluta (posição, não taxa) [F10.7–F10.10, KPI-16, KPI-18]
+// Alvo: a função pura que deriva a posição da mira da leitura ATUAL do eixo
+// (game/js/aim.js) e a normalização da convenção da Gamepad API
+// (game/js/input.js).
+
+test('G20: eixo constante ⇒ mira parada (F10.7)', () => {
+  // Reprova a implementação por velocidade (`pos += eixo × ganho × dt`), na
+  // qual a mira andaria a cada quadro.
+  const axis = { x: 0.5, y: 0 };
+  const first = crosshairFromAxes(axis.x, axis.y, WORLD.width, WORLD.height);
+  const dts = [1 / 60, 1 / 144, 1 / 30, 0.0123];
+  for (let frame = 0; frame < 120; frame += 1) {
+    // dt varia de propósito: a posição não pode depender dele de forma alguma
+    const dt = dts[frame % dts.length];
+    void dt;
+    const current = crosshairFromAxes(axis.x, axis.y, WORLD.width, WORLD.height);
+    assert.equal(current.x, first.x, `a mira deslocou em x no quadro ${frame}`);
+    assert.equal(current.y, first.y, `a mira deslocou em y no quadro ${frame}`);
+  }
+});
+
+test('G21: independência de histórico (KPI-16, F10.8)', () => {
+  const finalAxis = { x: -0.37, y: 0.62 };
+  const sequenceA = [
+    { x: 0, y: 0 },
+    { x: 1, y: -1 },
+    { x: 0.2, y: 0.9 },
+    finalAxis,
+  ];
+  const sequenceB = [
+    { x: -1, y: 1 },
+    { x: 0.85, y: -0.4 },
+    { x: 0, y: 0 },
+    finalAxis,
+  ];
+  const runSequence = (sequence) => {
+    let position = null;
+    for (const axis of sequence) {
+      position = crosshairFromAxes(axis.x, axis.y, WORLD.width, WORLD.height);
+    }
+    return position;
+  };
+  const endA = runSequence(sequenceA);
+  const endB = runSequence(sequenceB);
+  assert.deepEqual(endA, endB, 'a posição final da mira dependeu do histórico');
+  // e é igual à derivação direta do valor final, sem histórico nenhum
+  assert.deepEqual(
+    endA,
+    crosshairFromAxes(finalAxis.x, finalAxis.y, WORLD.width, WORLD.height)
+  );
+});
+
+test('G22: centro, bordas e sentido na tela (F10.7, F10.9)', () => {
+  const { width, height } = WORLD;
+  const center = crosshairFromAxes(0, 0, width, height);
+  assert.ok(Math.abs(center.x - width / 2) <= 1, 'eixo (0,0) deve mirar o centro em x');
+  assert.ok(Math.abs(center.y - height / 2) <= 1, 'eixo (0,0) deve mirar o centro em y');
+
+  // Bordas correspondentes (tolerância de 1 px)
+  const topRight = crosshairFromAxes(1, 1, width, height);
+  assert.ok(Math.abs(topRight.x - width) <= 1, 'x = +1 deve mirar a borda direita');
+  assert.ok(Math.abs(topRight.y - 0) <= 1, 'y = +1 deve mirar a borda SUPERIOR');
+  const bottomLeft = crosshairFromAxes(-1, -1, width, height);
+  assert.ok(Math.abs(bottomLeft.x - 0) <= 1, 'x = -1 deve mirar a borda esquerda');
+  assert.ok(Math.abs(bottomLeft.y - height) <= 1, 'y = -1 deve mirar a borda INFERIOR');
+
+  // Sentido, sobre o valor JÁ NORMALIZADO
+  const right = crosshairFromAxes(0.5, 0, width, height);
+  assert.ok(right.x > center.x, 'x > 0 deve pôr a mira à direita do centro');
+  const left = crosshairFromAxes(-0.5, 0, width, height);
+  assert.ok(left.x < center.x, 'x < 0 deve pôr a mira à esquerda do centro');
+  const up = crosshairFromAxes(0, 0.5, width, height);
+  assert.ok(up.y < center.y, 'y > 0 deve pôr a mira ACIMA do centro (y de tela menor)');
+  const down = crosshairFromAxes(0, -0.5, width, height);
+  assert.ok(down.y > center.y, 'y < 0 deve pôr a mira ABAIXO do centro');
+});
+
+test('G23: normalização da convenção da Gamepad API (KPI-18, F10.10)', () => {
+  const { width, height } = WORLD;
+  const center = crosshairFromAxes(0, 0, width, height);
+
+  // axes[3] NEGATIVO no standard mapping = stick para CIMA ⇒ y interno POSITIVO
+  const up = normalizeGamepadAxes(0, -0.5);
+  assert.ok(up.y > 0, 'axes[3] < 0 (cima) deve normalizar para y interno positivo');
+  const upAim = crosshairFromAxes(up.x, up.y, width, height);
+  assert.ok(upAim.y < center.y, 'stick para cima deve pôr a mira ACIMA do centro');
+
+  // axes[3] POSITIVO = stick para baixo ⇒ y interno negativo, mira abaixo
+  const down = normalizeGamepadAxes(0, 0.5);
+  assert.ok(down.y < 0, 'axes[3] > 0 (baixo) deve normalizar para y interno negativo');
+  const downAim = crosshairFromAxes(down.x, down.y, width, height);
+  assert.ok(downAim.y > center.y, 'stick para baixo deve pôr a mira ABAIXO do centro');
+
+  // axes[2] (horizontal) NÃO é invertido
+  const rightRaw = normalizeGamepadAxes(0.5, 0);
+  assert.equal(rightRaw.x, 0.5, 'o eixo horizontal não pode ser invertido');
+  const rightAim = crosshairFromAxes(rightRaw.x, rightRaw.y, width, height);
+  assert.ok(rightAim.x > center.x, 'axes[2] > 0 deve pôr a mira à direita');
+  const leftRaw = normalizeGamepadAxes(-0.5, 0);
+  assert.equal(leftRaw.x, -0.5);
+  const leftAim = crosshairFromAxes(leftRaw.x, leftRaw.y, width, height);
+  assert.ok(leftAim.x < center.x, 'axes[2] < 0 deve pôr a mira à esquerda');
 });

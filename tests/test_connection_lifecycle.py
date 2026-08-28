@@ -25,7 +25,11 @@ async def _hello(ws) -> dict:
 
 
 async def _activate_inputs(ws) -> None:
-    await ws.send(json.dumps({"type": "motion", "b": 0, "g": config.MAX_ANGLE_DEG, "t": 1}))
+    # Ponta girada ao maximo para a direita (alpha negativo): eixo horizontal
+    # saturado na pegada vertical (F4.6).
+    await ws.send(
+        json.dumps({"type": "motion", "a": -config.MAX_ANGLE_DEG, "b": 0, "g": 0, "t": 1})
+    )
     await ws.send(json.dumps({"type": "button", "id": "a", "down": True}))
     await asyncio.sleep(0.15)
 
@@ -108,7 +112,7 @@ async def test_c5_calibracao_nao_residual(live_server):
     _app, port, pad = live_server
     ws1 = await _connect(port)
     await _hello(ws1)
-    await ws1.send(json.dumps({"type": "motion", "b": 20.0, "g": 0.0, "t": 1}))
+    await ws1.send(json.dumps({"type": "motion", "a": 0.0, "b": 20.0, "g": 0.0, "t": 1}))
     await asyncio.sleep(0.1)
     await ws1.send(json.dumps({"type": "calibrate"}))
     await asyncio.sleep(0.1)
@@ -117,7 +121,7 @@ async def test_c5_calibracao_nao_residual(live_server):
     # nova sessão sem calibrar: offset padrão (nulo)
     ws2 = await _connect(port)
     await _hello(ws2)
-    await ws2.send(json.dumps({"type": "motion", "b": 20.0, "g": 0.0, "t": 2}))
+    await ws2.send(json.dumps({"type": "motion", "a": 0.0, "b": 20.0, "g": 0.0, "t": 2}))
     await asyncio.sleep(0.15)
     _x, y = pad.axes[config.TILT_TARGET_AXIS]
     assert y > 0.0, "offset da sessão anterior vazou para a nova sessão"

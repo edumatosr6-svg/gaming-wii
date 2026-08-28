@@ -66,6 +66,11 @@ BUTTON_IDS = (
 )
 BANNER_IDS = ("error-banner", "status-banner", "rotate-hint", "debug-line")
 
+# Viewport RETRATO obrigatório (tools/tooling.md): o aparelho de referência em
+# pé. Medir geometria em paisagem valida um layout que não existe mais e
+# mascara todos os defeitos de disposição do corpo de Wii Remote (F2).
+PORTRAIT_VIEWPORT = {"width": 412, "height": 915}
+
 # Endereço não roteável: a conexão fica pendente, mantendo o cliente no estado
 # `conectando` por tempo suficiente para medi-lo (W11).
 UNREACHABLE_HOST = "10.255.255.1"
@@ -186,7 +191,7 @@ class Controller:
 
 
 async def _open_controller(browser, server: ServerHandle, *, goto: bool = True) -> Controller:
-    context = await browser.new_context(has_touch=True, viewport={"width": 900, "height": 420})
+    context = await browser.new_context(has_touch=True, viewport=dict(PORTRAIT_VIEWPORT))
     page = await context.new_page()
     controller = Controller(page=page, server=server)
 
@@ -554,3 +559,173 @@ async def test_w21_faixas_visiveis_nao_se_cobrem(connected_controller: Controlle
     assert (
         overlaps == []
     ), f"faixas visíveis se cobrindo (a de baixo fica ilegível): {overlaps} — caixas: {visible}"
+
+
+# --------------------------- W22–W24: corpo de Wii Remote em retrato (F2.10–F2.12)
+
+
+async def _control_boxes(page) -> dict:
+    """Caixas de layout dos controles acionáveis da tela `conectado`."""
+    return await page.eval_on_selector_all(
+        "#pad-screen [data-button], #calibrate-button",
+        """els => Object.fromEntries(els.map(el => {
+             const r = el.getBoundingClientRect();
+             return [el.dataset.button || el.id, {
+               cx: r.x + r.width / 2, cy: r.y + r.height / 2,
+               area: r.width * r.height, width: r.width, height: r.height,
+             }];
+           }))""",
+    )
+
+
+async def test_w22_geometria_do_corpo_de_wii_remote(connected_controller: Controller):
+    """W22 (F2.10): ordem vertical, dominância do A, centralização e proximidade.
+
+    Reprova o reaproveitamento do layout de paisagem, que não tem nem a ordem
+    nem a dominância do botão A.
+    """
+    controller = connected_controller
+    viewport = controller.page.viewport_size
+    assert (
+        viewport["height"] > viewport["width"]
+    ), f"o viewport do teste precisa ser retrato (F2): {viewport}"
+
+    boxes = await _control_boxes(controller.page)
+    faltando = [name for name in (*BUTTON_IDS, "calibrate-button") if name not in boxes]
+    assert faltando == [], f"controles ausentes da tela conectado: {faltando}"
+
+    tip = await controller.page.evaluate("""() => {
+             const el = document.getElementById('sensor-tip');
+             const r = el.getBoundingClientRect();
+             return { cy: r.y + r.height / 2, area: r.width * r.height };
+           }""")
+
+    # (a) ordem vertical: ponta do sensor < D-pad < A < START/BACK < L/R
+    dpad_cy = max(boxes[d]["cy"] for d in ("up", "down", "left", "right"))
+    a_cy = boxes["a"]["cy"]
+    system_cy = min(boxes["start"]["cy"], boxes["back"]["cy"])
+    shoulders_cy = min(boxes["lb"]["cy"], boxes["rb"]["cy"])
+    dpad_top = min(boxes[d]["cy"] for d in ("up", "down", "left", "right"))
+
+    assert tip["cy"] < dpad_top, f"ponta do sensor não está acima do D-pad: {tip} vs {dpad_top}"
+    assert dpad_cy < a_cy, f"D-pad não está acima do A: {dpad_cy} vs {a_cy}"
+    assert a_cy < system_cy, f"A não está acima de START/BACK: {a_cy} vs {system_cy}"
+    assert (
+        system_cy < shoulders_cy
+    ), f"START/BACK não estão acima de L/R: {system_cy} vs {shoulders_cy}"
+
+    # (b) o botão A domina o corpo: área estritamente maior que a de qualquer outro
+    outros = {name: box["area"] for name, box in boxes.items() if name != "a"}
+    maior_outro = max(outros.values())
+    assert boxes["a"]["area"] > maior_outro, (
+        f"o botão A não domina o corpo do controle: área {boxes['a']['area']:.0f} "
+        f"não é maior que a de {max(outros, key=outros.get)} ({maior_outro:.0f})"
+    )
+
+    # (c) centro do A a no máximo 5% da largura do eixo vertical central
+    eixo_central = viewport["width"] / 2
+    desvio = abs(boxes["a"]["cx"] - eixo_central)
+    assert desvio <= 0.05 * viewport["width"], (
+        f"centro do A a {desvio:.1f}px do eixo central "
+        f"(máximo {0.05 * viewport['width']:.1f}px)"
+    )
+
+    # (d) B, X e Y ficam mais perto do A do que do D-pad, de L e de R
+    distantes = ("up", "down", "left", "right", "lb", "rb")
+
+    def distancia(um, outro):
+        dx = boxes[um]["cx"] - boxes[outro]["cx"]
+        dy = boxes[um]["cy"] - boxes[outro]["cy"]
+        return (dx**2 + dy**2) ** 0.5
+
+    for face in ("b", "x", "y"):
+        ate_a = distancia(face, "a")
+        for longe in distantes:
+            assert ate_a < distancia(face, longe), (
+                f"o botão {face.upper()} está mais perto de {longe.upper()} "
+                f"({distancia(face, longe):.1f}px) do que do A ({ate_a:.1f}px) — F2.10(d)"
+            )
+
+
+async def test_w23_ponta_do_sensor_ancorada_e_com_estado(browser, live_http_server):
+    """W23 (F2.11): a ponta do sensor fica acima de tudo e muda com o estado."""
+    controller = await _open_controller(browser, live_http_server)
+
+    async def tip_state() -> dict:
+        return await controller.page.evaluate("""() => {
+                 const el = document.getElementById('sensor-tip');
+                 const r = el.getBoundingClientRect();
+                 return { marker: el.dataset.connState || el.className,
+                          cy: r.y + r.height / 2, area: r.width * r.height };
+               }""")
+
+    marcadores: dict[str, str] = {}
+
+    # conectado: visível, acima de todos os controles acionáveis
+    await controller.wait_state("conectado")
+    conectado = await tip_state()
+    marcadores["conectado"] = conectado["marker"]
+    assert conectado["area"] > 0, "ponta do sensor invisível na tela conectado"
+    boxes = await _control_boxes(controller.page)
+    mais_alto = min(box["cy"] for box in boxes.values())
+    assert (
+        conectado["cy"] < mais_alto
+    ), f"ponta do sensor não está acima dos controles: {conectado['cy']} vs {mais_alto}"
+
+    # desconectado
+    live_http_server.stop()
+    await controller.wait_state("desconectado")
+    marcadores["desconectado"] = (await tip_state())["marker"]
+
+    # pareamento
+    await controller.tap("#pair-manually-button")
+    await controller.wait_state("pareamento")
+    marcadores["pareamento"] = (await tip_state())["marker"]
+
+    # conectando
+    await controller.page.fill("#ip-input", UNREACHABLE_HOST)
+    await controller.tap("#connect-button")
+    await controller.wait_state("conectando", timeout=4000)
+    marcadores["conectando"] = (await tip_state())["marker"]
+
+    assert set(marcadores) == set(SCREEN_STATES), f"estados não cobertos: {marcadores}"
+    assert len(set(marcadores.values())) == len(SCREEN_STATES), (
+        "a ponta do sensor não tem aparência distinta em cada estado de conexão "
+        f"(F2.11): {marcadores}"
+    )
+
+
+async def test_w24_ilustracao_de_pegada_ensina_a_segurar(browser, live_http_server):
+    """W24 (F2.12): a ilustração da pegada tem área > 0 em pareamento e conectando."""
+    controller = await _open_controller(browser, live_http_server)
+
+    async def illustration_area() -> float:
+        return await controller.page.evaluate("""() => {
+                 const visible = [...document.querySelectorAll('#screens [data-screen]')]
+                   .find(s => !s.hidden);
+                 if (!visible) return -1;
+                 const el = visible.querySelector('.grip-illustration');
+                 if (!el) return 0;
+                 const r = el.getBoundingClientRect();
+                 return r.width * r.height;
+               }""")
+
+    # pareamento: alcançável pelo comando da tela de queda
+    await controller.wait_state("conectado")
+    live_http_server.stop()
+    await controller.wait_state("desconectado")
+    await controller.tap("#pair-manually-button")
+    await controller.wait_state("pareamento")
+    area_pareamento = await illustration_area()
+    assert (
+        area_pareamento > 0
+    ), f"ilustração de pegada ausente/oculta no estado pareamento (área={area_pareamento})"
+
+    # conectando: endereço não roteável mantém a tentativa pendente
+    await controller.page.fill("#ip-input", UNREACHABLE_HOST)
+    await controller.tap("#connect-button")
+    await controller.wait_state("conectando", timeout=4000)
+    area_conectando = await illustration_area()
+    assert (
+        area_conectando > 0
+    ), f"ilustração de pegada ausente/oculta no estado conectando (área={area_conectando})"
