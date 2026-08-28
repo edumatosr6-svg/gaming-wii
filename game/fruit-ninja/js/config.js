@@ -101,6 +101,25 @@ export const config = Object.freeze({
 
   // Paleta das frutas (decorativa, sem KPI): cor por `colorIndex`.
   fruitColors: Object.freeze(['#e5484d', '#f5a524', '#46a758', '#8e4ec6', '#e93d82', '#0090ff']),
+  // Tom mais claro da polpa por fruta, usado no interior das metades.
+  fruitFleshColors: Object.freeze(['#ffd9d2', '#fff0c9', '#e3f9d5', '#ecdcff', '#ffd9ea', '#cdeeff']),
+
+  // --- visual: decorativo, sem KPI (ver F14 — "qualidade estética") --------
+  // Números de desenho ficam aqui pela mesma razão dos demais: nenhum
+  // "número mágico" solto em render.js (F14).
+  visual: Object.freeze({
+    starCount: 70,
+    nebulaCount: 3,
+    particlesPerSlice: 12,
+    particleLifeMs: 480,
+    particleSpeedCssPerS: 260,
+    particleGravityCssPerS2: 700,
+    particleRadiusCss: 3.2,
+    bombPulseHz: 2.4,
+    bombSparkHz: 6,
+    comboPopThreshold: 2,
+    hitFlashMs: 420,
+  }),
 });
 
 /** Cópia profunda simples do config, para `getConfig()` e para testes. */
