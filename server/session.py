@@ -39,8 +39,11 @@ class SessionState:
     ) -> None:
         self.session_id: str = uuid.uuid4().hex
         self.websocket = websocket  # canal de saída da sessão (data model da spec)
-        self.calibration_offset: tuple[float, float] = (0.0, 0.0)
-        self.last_motion: tuple[float, float, float] | None = None
+        # Orientação de calibração (alpha0, beta0, gamma0) — F5: o zero padrão
+        # (offset nulo) vale até a primeira calibração; alpha0 pode ser None
+        # quando o sensor não reporta yaw (degradação documentada, M8b).
+        self.calibration_offset: tuple[float | None, float, float] = (0.0, 0.0, 0.0)
+        self.last_motion: tuple[float | None, float, float, float] | None = None
         self.button_state: dict[str, bool] = {}
         self.connected: bool = True
         self.metrics = metrics
@@ -49,9 +52,9 @@ class SessionState:
         self._target_axis = target_axis
 
     def handle_motion(self, msg: Motion) -> None:
-        """Caminho crítico: amostra `motion` → eixo do gamepad virtual."""
-        self.last_motion = (msg.b, msg.g, msg.t)
-        axes = mapping.tilt_to_axes(msg.b, msg.g, offset=self.calibration_offset)
+        """Caminho crítico: amostra `motion` → posição apontada no gamepad (F4)."""
+        self.last_motion = (msg.a, msg.b, msg.g, msg.t)
+        axes = mapping.pointing_to_axes(msg.a, msg.b, msg.g, offset=self.calibration_offset)
         smoothed = self._smoother.apply(axes)
         self._gamepad.set_axis(self._target_axis, smoothed[0], smoothed[1])
 
@@ -67,9 +70,10 @@ class SessionState:
         offset anterior — sem acúmulo (F5.2, M15).
         """
         if self.last_motion is not None:
-            self.calibration_offset = (self.last_motion[0], self.last_motion[1])
+            a0, b0, g0, _t = self.last_motion
+            self.calibration_offset = (a0, b0, g0)
         else:
-            self.calibration_offset = (0.0, 0.0)
+            self.calibration_offset = (0.0, 0.0, 0.0)
         self._smoother.reset()
 
     def disconnect(self) -> None:

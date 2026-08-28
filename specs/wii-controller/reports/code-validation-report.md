@@ -2,126 +2,75 @@
 
 **Veredito: SUCCESS**
 
-Data: 2026-08-26 — iteração 1 do Coding Loop (pós-revisão humana), 2ª passada
-(após correção dos 2 problemas apontados na 1ª passada).
-
-Escopo desta iteração: reconciliação do cliente (`web/`) com as specs reaprovadas, que
-agora exigem a máquina de estados visuais (F2.5), entrada por toque sem depender de
-`click` (F2.6/F2.9), não-interceptação de toque (F2.7), fullscreen em gesto concluído
-(F2.8), conexão pela origem (F3.1/F3.2), reconexão automática (F9.5) e proibição de
-falha silenciosa (F9.6/F9.7). No servidor houve apenas autofix de `ruff` (UP035/UP017)
-e `black`, sem mudança de comportamento.
+Data: 2026-08-27 — validação estática da rodada "pegada vertical + apontamento
+absoluto" (specs reaprovadas no commit 6d41125). Nenhum teste executado aqui
+(Testing Loop é do impl-tester).
 
 ## Cobertura de specs
 
-| Feature | Status | Evidência |
+| Feature | Estado | Evidência |
 |---|---|---|
-| F1 Servidor local (HTTPS + WS mesma porta) | Implementado | `server/main.py` (`run_server`, `make_process_request`, `print_urls`), `server/tls.py` |
-| F2.1–F2.4 Cliente vanilla, imersivo, falha alta | Implementado | `web/index.html`, `web/js/main.js`; aviso de erro agora legível (ver Correções) |
-| F2.5 Máquina de estados visuais | Implementado | `web/index.html` (4 seções `[data-screen]` em `#screens`), `web/js/main.js:40` (`setScreen`, mecanismo único), `web/css/style.css:11` (`[hidden] { display: none !important }` documentado como contrato) |
-| F2.6/F2.9 Entrada por toque, nunca só `click` | Implementado | `web/js/controls.js:96` (`onActivate`: `touchstart` primário + `click` adicional com guarda de ghost-click); varredura de `addEventListener` confirma que o **único** listener de `click` do cliente está dentro de `onActivate` |
-| F2.7 Nada intercepta o toque | Implementado | `web/css/style.css:113` (`pointer-events: none` em `.banner-stack`) e `:127` (em `.banner`, defesa em profundidade); recuos de `#buttons-area` reservam a faixa |
-| F2.8 Fullscreen em gesto concluído | Implementado | `web/js/main.js:176` (`touchend`, uma única vez via `immersiveRetried`); listener dos botões em `#buttons-area` dispara antes por bubbling |
-| F3 Pareamento por IP / conexão pela origem | Implementado | `web/js/connection.js:16` (`addressFromLocation`, puro), `web/js/main.js:236` (auto-conexão), tela de pareamento manual como exceção |
-| F4 Controle por inclinação | Implementado | `server/mapping.py` (`tilt_to_axes`), `web/js/motion.js` (throttle 60 Hz) |
-| F5 Calibração de centro | Implementado | `server/session.py` (`handle_calibrate`), `web/js/main.js:189` (`sendCalibrate` via `onActivate`, com guarda de conexão) |
-| F6 Botões touch multi-touch | Implementado | `web/js/controls.js` (`createButtonTracker`: posse do toque, 1 down/1 up por pressão) |
-| F7 Emulação de gamepad virtual | Implementado | `server/gamepad/`; callback de rumble sem anotações preservado em `windows.py:62` |
-| F8 Rumble fim-a-fim | Implementado | callback do driver → `combine_rumble` → `vibrate`; `web/js/haptics.js`; `game/js/rumble-fallback.js` |
-| F9.1–F9.4 Ciclo de vida / zeragem | Implementado | ping/pong ≤ 3 s, `SessionState.disconnect()` no `finally` |
-| F9.5 Reconexão automática | Implementado | `web/js/main.js:99` (`scheduleReconnect`, 800 ms), `web/js/connection.js:59` (guarda de geração impede o laço de sockets obsoletos) |
-| F9.6/F9.7 Estado sempre visível, sem falha silenciosa | Implementado | Pilha de faixas persistente fora das telas + `#close-reason` + guarda em `sendCalibrate` |
-| F10 Duck Shooting | Implementado | `game/js/` (lógica pura, input só por Gamepad API, loop de passo fixo) |
-| F11 Instrumentação de latência | Implementado | `server/metrics.py`, `GET /metrics`, overlay do jogo |
+| F1 Servidor local | Implementado (sem mudança nesta rodada) | `server/main.py` — HTTPS+WS mesma porta, rotas `/metrics`, `/rumble`, `/game` |
+| F2 Cliente retrato "corpo de Wii Remote" | Implementado | `web/index.html` (ordem: `#sensor-tip` persistente → D-pad → A dominante `.a-main` 8.5rem → B/X/Y colados ao A → START/BACK → L/R), `web/css/style.css` (coluna centrada; A com área estritamente maior; `[data-conn-state]` distinto nos 4 estados; ilustração de pegada `.grip-illustration` em `pareamento`/`conectando`; reforço `.grip-reminder` junto ao calibrar), `web/js/main.js` (`screen.orientation.lock('portrait')`; ponta do sensor atualizada em `setScreen`) |
+| F3 Pareamento por IP | Implementado (sem mudança) | `web/js/main.js`/`connection.js` |
+| F4 Apontamento absoluto pegada vertical | Implementado | `server/mapping.py::pointing_to_axes` — yaw direita = −Δalpha → x; pitch cima = Δbeta → y; rolagem (gamma) fora do mapeamento por construção (F4.7); ordem (a) offset → (b) derivação → (c) zona morta radial → (d) sensibilidade → (e) saturação suave; puro, sem I/O; `web/js/motion.js` envia `a`,`b`,`g` crus a 60 Hz |
+| F5 Calibração | Implementado | `server/session.py` — offset triplo `(alpha0, beta0, gamma0)`, zero padrão sem amostra prévia, sem acúmulo |
+| F6 Botões touch | Implementado (sem mudança) | `web/js/controls.js` — posse do toque preservada |
+| F7 Gamepad virtual | Implementado (sem mudança) | `server/gamepad/` — passagem direta y+ = cima (convenção XInput) confere com F4/F10.10 |
+| F8 Rumble | Implementado (sem mudança) | `mapping.combine_rumble`/`clamp_rumble` |
+| F9 Ciclo de vida | Implementado (sem mudança) | `session.disconnect`, reconexão no cliente |
+| F10 Duck Shooting mira absoluta | Implementado | `game/js/aim.js::crosshairFromAxes` (pura: eixo + geometria → posição; (0,0)→centro, ±1→bordas, y+ ⇒ acima do centro); `game/js/input.js::normalizeGamepadAxes` (ÚNICO ponto de inversão do Y do standard mapping); `game/js/loop.js` sem integração de velocidade (`CROSSHAIR_SPEED` removido; mira derivada da leitura atual a cada quadro) |
+| F11 Métricas | Implementado (sem mudança) | `server/metrics.py`, overlay do jogo |
 
-Verificações estáticas de `tools/tooling.md`: (1) `vgamepad` só em `server/gamepad/windows.py` ✔;
-(2) nenhum `WebSocket` em `game/` fora do fallback isolado ✔; (3) sem imports cruzados
-`game/`↔`web/` ✔; (4) tuning centralizado em `server/config.py` ✔; (5) nenhum controle
-com `click` como caminho único ✔; (6) faixas com captura de toque neutralizada ✔.
+Data models: `Motion` ganhou `a: float | None` (`server/protocol.py`), descarte
+de malformadas preservado; `SessionState.calibration_offset` agora triplo,
+`last_motion` quádruplo `(a, b, g, t)`; `ClientViewState` inalterado;
+`Config` com `MAX_ANGLE_DEG = 20°` documentado como parâmetro de ergonomia
+(faixa 15–30) e `SMOOTHING_ALPHA = 0.2` dentro do orçamento KPI-17
+(degrau → 90% em 2 amostras a 60 Hz, ≤ 6 exigidas).
 
-## Correções desta passada (todas verificadas)
+## Verificações de diretivas
 
-1. **Empilhamento das faixas (Problemas 1 e 2 da passada anterior) — corrigido na raiz.**
-   As quatro faixas deixaram de ser ancoradas individualmente. `web/index.html:28` e `:33`
-   introduzem duas pilhas de fluxo — `#top-banners` (`.banner-stack.top`, com
-   `#error-banner` e `#status-banner`) e `#bottom-banners` (`.banner-stack.bottom`, com
-   `#rotate-hint` e `#debug-line`). Em `web/css/style.css:100`, `.banner-stack` é o
-   **único** elemento com `position: fixed` + `z-index`, e usa
-   `display: flex; flex-direction: column`; `.banner` (`:124`) perdeu `position`, `top`,
-   `bottom`, `left`, `right` e `z-index`, ficando só com apresentação. Varredura do
-   arquivo confirma que as únicas ocorrências restantes de `position:`/`z-index:`/`top:`/
-   `bottom:` são as da `.banner-stack` (`:101`, `:104`, `:117`, `:121`).
-   Isto é a correção estrutural, não o remendo de `z-index`: uma faixa nova acrescentada
-   a qualquer das pilhas empilha em fluxo e não tem como esconder as existentes.
-   Medição em Chromium headless com **as duas faixas excepcionais forçadas visíveis ao
-   mesmo tempo**: `error-banner` 0–36, `status-banner` 36–72, `rotate-hint` 345–381,
-   `debug-line` 381–400, `SOBREPOSICOES: []`. F2.3 (aviso em ≤ 2 s nomeando o problema) e
-   F3 critério 4 (erro de endereço em ≤ 5 s) voltam a ser observáveis; F2.2 recupera o
-   fallback visual de rotação legível.
-2. **F2.7/W14 não regrediu.** `pointer-events: none` subiu para `.banner-stack` — que é
-   onde a captura precisa morrer agora, já que é o contêiner que cobre os controles — e
-   permanece em `.banner` como defesa em profundidade. Revalidado no mesmo cenário, com
-   erro e dica visíveis: `W14 interceptados: []`.
-3. **Corrida em `sendCalibrate` (Observação 6) — corrigida.** `web/js/main.js:194`: com
-   `connection.isOpen` falso a função exibe `Calibração não enviada: sem conexão com o
-   PC.` e retorna, em vez de escrever confirmação de uma calibração que
-   `connection.send()` descartaria em silêncio (F9.7).
+- Estrutura de pastas respeitada; nenhum import de driver fora de
+  `server/gamepad/`; `mapping.py` continua sem I/O.
+- `ruff check server` e `black --check server` passam; `node --check` passa em
+  todos os módulos JS alterados; type hints presentes nas funções públicas
+  novas; comentários em português, identificadores em inglês.
+- Jogo não importa nada de `web/` nem do servidor (`aim.js` é local);
+  `WebSocket` não aparece em código do jogo fora do fallback (apenas menção em
+  comentário pré-existente de `input.js`).
+- `game/fruit-ninja/` não foi tocado (slug próprio), conforme instrução.
 
-## Problemas encontrados
+## Pontos verificados contra os defeitos-alvo da revisão
 
-Nenhum.
+1. **Eixo trocado/invertido de paisagem**: o mapeamento antigo (gamma→x,
+   beta→y, alpha ignorado) foi removido; `adjustForLandscape` do cliente foi
+   removido. O novo par (−Δalpha→x, Δbeta→y) responde à metáfora do
+   infravermelho: sentidos conferidos analiticamente (alpha cresce no sentido
+   anti-horário visto de cima ⇒ ponta à direita ⇒ −Δalpha > 0 ⇒ x > 0;
+   levantar a ponta ⇒ beta cresce ⇒ y > 0).
+2. **Mira por velocidade**: `loop.js` não guarda mais posição anterior da mira
+   — `crosshair` é recomputado por quadro de `crosshairFromAxes(eixo atual)`;
+   invariante do GameState respeitada.
+3. **Sinal do eixo Y na fronteira da Gamepad API** (reprovação da iteração 1
+   do spec-loop): a inversão vive só em `normalizeGamepadAxes` e o resto do
+   jogo opera no valor normalizado (y+ = cima), como exige F10.10.
 
 ## Observações
 
-1. **`POST /rumble` por query string** (`server/main.py`, rota `/rumble`) — pendência
-   herdada, inalterada. O handler HTTP embutido do `websockets` não lê corpo de
-   requisição e as diretivas proíbem framework web; a spec (F8.3) não define o payload do
-   fallback. Decisão documentada no código. **Se o `impl-tester` concluir que corpo JSON
-   era exigido, isto é lacuna de spec (`FAIL SPEC`), não defeito de código** — mas não
-   bloqueia enquanto nenhum teste falhar por causa disso.
-2. **W15 não foi exercitado.** A estrutura que o satisfaz existe e está localizada:
-   fullscreen apenas em `touchend` e uma única vez (`web/js/main.js:175-185`), com o
-   listener dos botões em `#buttons-area` (`web/js/main.js:220`) disparando antes por
-   bubbling — a mensagem `button` já saiu quando o pedido de fullscreen acontece. A
-   verificação é do Testing Loop.
-3. **`prettier --check` não pôde rodar.** Não há npm no ambiente e as diretivas proíbem
-   dependência npm no cliente; a formatação JS foi feita à mão seguindo a convenção
-   (aspas simples, ponto e vírgula). `tools/tooling.md` lista o comando, mas não há
-   caminho para executá-lo sem violar outra diretiva — **atrito entre `tooling.md` e
-   `coding-directives.md` que a spec não resolve**. Não bloqueia; convém decidir
-   explicitamente na próxima revisão de spec.
-4. **W16 admite duas leituras.** A checagem foi implementada como "todo
-   `addEventListener('click')` em `web/js/` convive com um registro de evento de toque
-   para a mesma ação", concentrada em `onActivate` (`web/js/controls.js:96`). Se o
-   `impl-tester` escrever o check por outro critério (varredura por elemento acionável em
-   vez de por handler), pode divergir sem que o código esteja errado.
-5. **Risco para W19:** passados os 800 ms de `RECONNECT_DELAY_MS`, `connectTo()`
-   (`web/js/main.js:76`) troca para a tela `conectando` e reescreve o texto da faixa, e o
-   `#close-reason` passa a viver numa tela oculta. O motivo da queda continua visível
-   apenas na faixa persistente `#debug-line` ("última queda: …", `web/js/main.js:228`).
-   F9.7 é atendido em sentido estrito, mas **o teste W19 precisa olhar para o lugar onde o
-   motivo realmente sobrevive**, não para `#close-reason` depois que a tela já mudou.
-6. **Recuos de `#buttons-area` dimensionados para uma faixa por pilha.**
-   `web/css/style.css` usa `padding: 2.8rem 1rem 1.6rem`, que cobre o caso normal (só a
-   faixa de status no topo, só a linha de diagnóstico no rodapé). Quando uma faixa
-   excepcional aparece, a pilha cresce e passa a se sobrepor visualmente à fileira de
-   ombro — **sem bloquear o toque**, porque a captura está neutralizada na pilha. Nenhum
-   critério de aceite cobre a legibilidade dos botões durante um erro, e reservar duas
-   linhas permanentemente custaria ~17% da altura útil em paisagem. Comportamento
-   comentado na fonte.
-7. **Classe de defeito ainda sem cobertura automatizada.** Os dois problemas desta
-   iteração eram CSS anulando um mecanismo de JS correto — a mesma família documentada no
-   `implementation-report.md`. Foram achados por revisão estática, não por teste: nem a
-   lógica pura nem W11–W19 como especificados medem legibilidade de faixas sobrepostas.
-   **Recomendação ao Testing Loop:** cobrir isso com um caso próprio (faixas visíveis
-   simultaneamente não podem ter caixas de layout que se intersectam), acrescentando-o
-   antes à spec de teste em `tests/client-controller.md` para não criar teste órfão.
-8. **Espelhos de constantes:** `web/js/main.js` espelha `MOTION_SEND_HZ = 60` e a porta
-   padrão `8443` de `server/config.py` (JS estático não importa Python); ambos comentados
-   na fonte.
-9. **Estado verificado sem rodar a suíte nova:** `pytest -q` em 52 passed / 22 deselected,
-   `ruff check server` e `black --check server` limpos, `node --check` sem erro em todos
-   os módulos de `web/`. Isso é o estado *anterior* à faixa W11–W19 — que ainda não existe
-   como teste versionado e é obrigatória na suíte padrão. **Este relatório não é evidência
-   de que o produto funciona**; é evidência de que o código está estruturalmente apto a
-   ser testado.
+- **Fruit Ninja (registro, não ação)**: `game/fruit-ninja/js/input.js::axesToTarget`
+  já consome o eixo como posição absoluta com calibração própria e assume
+  `axes[3]` positivo = baixo (convenção do standard mapping), que esta rodada
+  preserva na fronteira do driver. Compatível; nenhuma edição feita lá.
+- **Borda ±180°**: `_wrap_180` normaliza −180 → +180 (mesmo ponto físico);
+  documentado no código. M4/M7 satisfeitos; um vetor de teste que espere
+  −1.0 exatamente em −180° deve usar a nota de borda do docstring.
+- **Alpha nulo (M8b)**: degradação documentada — eixo horizontal em 0.0,
+  vertical funcional; aplica-se também quando a calibração capturou alpha nulo.
+- **Suíte de testes atual está desatualizada por concepção**: `tests/test_mapping.py`
+  referencia `tilt_to_axes` e `tests/test_client_headless.py` mede o layout de
+  paisagem — a atualização é responsabilidade do impl-tester nesta iteração
+  (specs de teste M8b/M17–M20, G20–G23, W22–W24 já reescritas).
+- `prettier` não está instalado no ambiente local (sem npm no projeto, por
+  diretiva); formatação JS seguida manualmente e sintaxe conferida com
+  `node --check`.

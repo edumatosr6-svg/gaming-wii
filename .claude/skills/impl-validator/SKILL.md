@@ -20,6 +20,18 @@ specs e diretivas — sem executar nada.
   tudo dentro do permitido em `coding-directives.md` e `tools/`?
 - **Uso de dependências**: nenhuma lib fora do que está em `tools/dependencies.md` sem
   justificativa?
+- **Contratos com outros slugs**: se existem outros slugs em `specs/`, o código deste
+  slug respeita o que as specs deles assumem? O mesmo raciocínio do `spec-validator`,
+  agora no nível do código: identifique o que este código **produz** que outro slug
+  consome (protocolo, formato, semântica de um valor, rota, arquivo compartilhado) e
+  confirme que a implementação continua honrando aquele contrato.
+  - Atenção redobrada a mudança de **semântica sem mudança de assinatura** — a função
+    continua devolvendo o mesmo tipo, no mesmo intervalo, mas o significado mudou.
+    Nenhum compilador, linter ou teste de tipo pega isso, e o outro slug quebra em
+    runtime ou, pior, funciona errado em silêncio.
+  - Se a incompatibilidade for deliberada e a spec já a registrou, confirme que está
+    registrada; se não estiver, isso é `FAIL` com o slug afetado nomeado.
+  - Não conserte o outro slug aqui — ele tem ciclo próprio. Aponte e deixe explícito.
 - **Erros óbvios**: sintaxe inválida, imports quebrados, referências a arquivos/funções que
   não existem, lógica claramente incompleta (TODOs sem implementação em caminho crítico).
 - **Segurança/robustez básica**: tratamento de erro nos pontos que as specs marcam como
@@ -34,6 +46,10 @@ specs e diretivas — sem executar nada.
 
 ## Cobertura de specs
 (feature por feature: implementado / parcial / faltando)
+
+## Contratos com outros slugs
+(um por linha: `<slug> — <o que atravessa a fronteira> — honrado | quebrado | n/a`.
+Se não houver outros slugs, diga isso explicitamente em vez de omitir a seção.)
 
 ## Problemas encontrados (se FAIL)
 1. <arquivo:linha ou função> — <o que está errado> — <o que precisa mudar>

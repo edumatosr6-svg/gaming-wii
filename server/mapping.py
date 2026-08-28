@@ -1,8 +1,31 @@
-"""Conversão de inclinação/botões → estado do gamepad (módulo puro, sem I/O).
+"""Conversão de apontamento/botões → estado do gamepad (módulo puro, sem I/O).
 
-Regras (F4): ordem de aplicação — (a) offset de calibração; (b) zona morta
-radial; (c) curva de sensibilidade; (d) saturação suave (derivada contínua no
-intervalo útil, saída exatamente ±1.0 a partir do ângulo máximo).
+Modelo de apontamento absoluto na pegada VERTICAL (F4): o aparelho é segurado
+em pé como um Wii Remote, com um "emissor infravermelho imaginário" no topo.
+Onde o topo (a ponta) aponta, a mira está — a amostra de orientação converte
+em POSIÇÃO apontada (x, y) ∈ [-1, 1]², função pura da amostra atual +
+calibração (mesma inclinação ⇒ mesma posição, independentemente do histórico).
+
+Derivação da direção da ponta (convenção do ``DeviceOrientationEvent``, ordem
+intrínseca Z-X'-Y'' com ``alpha`` em torno de Z, ``beta`` de X', ``gamma`` de
+Y''; a ponta é o eixo +y do aparelho):
+
+- **Guinada (yaw)** — ângulo horizontal da ponta: girar o pulso para apontar a
+  ponta para a direita DIMINUI ``alpha`` (alpha cresce no sentido
+  anti-horário visto de cima), logo ``yaw_direita = -(alpha - alpha0)``.
+- **Arfagem (pitch)** — elevação da ponta: levantar a ponta AUMENTA ``beta``,
+  logo ``pitch_cima = beta - beta0``.
+- **Rolagem** — torcer o aparelho no próprio eixo longitudinal é exatamente a
+  rotação ``gamma`` (último eixo intrínseco, o próprio eixo da ponta): ela NÃO
+  muda a direção da ponta, e por construção não entra no mapeamento (F4.7).
+
+ATENÇÃO: este mapeamento é o da pegada vertical e é DIFERENTE do antigo de
+paisagem (que usava gamma→x / beta→y e ignorava alpha) — reaproveitar aquele
+produz eixo trocado/invertido (reprovado por M17/M18).
+
+Ordem de aplicação (F4): (a) offset de calibração; (b) derivação yaw/pitch da
+ponta; (c) zona morta radial; (d) curva de sensibilidade; (e) saturação suave
+(derivada contínua no intervalo útil, saída exatamente ±1.0 no ângulo máximo).
 
 Nenhum import de I/O, rede ou driver. Todas as funções são determinísticas;
 o único estado é o filtro de suavização, que é um objeto explícito.
@@ -41,44 +64,74 @@ def _shape(normalized: float, sensitivity: float) -> float:
     return math.sin(curved * math.pi / 2.0)
 
 
-def tilt_to_axes(
+def _wrap_180(angle_deg: float) -> float:
+    """Normaliza um delta angular para o intervalo (-180, 180].
+
+    Nota de borda: +180° e -180° são o mesmo ponto físico; ambos normalizam
+    para +180 (saturando em +1.0 no eixo correspondente — M4/M7).
+    """
+    wrapped = math.fmod(angle_deg, 360.0)
+    if wrapped > 180.0:
+        wrapped -= 360.0
+    elif wrapped <= -180.0:
+        wrapped += 360.0
+    return wrapped
+
+
+def pointing_to_axes(
+    alpha: object,
     beta: object,
     gamma: object,
-    offset: tuple[float, float] = (0.0, 0.0),
+    offset: tuple[float | None, float, float] = (0.0, 0.0, 0.0),
     dead_zone_deg: float = config.DEAD_ZONE_DEG,
     max_angle_deg: float = config.MAX_ANGLE_DEG,
     sensitivity: float = config.SENSITIVITY,
 ) -> tuple[float, float]:
-    """Converte ângulos (graus) em par de eixos XInput em [-1.0, 1.0].
+    """Converte a orientação (graus) na posição apontada (x, y) ∈ [-1, 1]².
 
-    ``beta`` alimenta o eixo Y e ``gamma`` o eixo X. Entradas inválidas
-    (NaN, None, strings) produzem saída neutra (0.0, 0.0) — nunca exceção
-    nem valor fora de [-1, 1] (M7, M8, critério F4.4).
+    Sentido normativo (F4.6): ponta para a DIREITA ⇒ x > 0; LEVANTAR a ponta
+    ⇒ y > 0. ``gamma`` (rolagem) é aceito pelo contrato do protocolo, mas não
+    altera a direção da ponta (F4.7) — ver docstring do módulo.
+
+    ``offset`` é a orientação de calibração ``(alpha0, beta0, gamma0)``; o
+    centro calibrado vira (0, 0) e absorve o zero arbitrário de alpha (F5).
+
+    Degradação documentada (M8b/F4.4): com ``alpha`` nulo/inválido (sensor sem
+    yaw) — na amostra ou na calibração — o eixo horizontal fica em 0.0 e o
+    vertical continua funcional. ``beta`` inválido produz saída neutra (0, 0).
+    Nunca exceção nem valor fora de [-1, 1].
     """
+    a = _sanitize_angle(alpha)
     b = _sanitize_angle(beta)
-    g = _sanitize_angle(gamma)
-    if b is None or g is None:
+    _sanitize_angle(gamma)  # aceito pelo contrato; não entra na direção da ponta
+    if b is None:
         return (0.0, 0.0)
 
-    # (a) offset de calibração
-    b -= offset[0]
-    g -= offset[1]
+    alpha0 = _sanitize_angle(offset[0])
+    beta0 = _sanitize_angle(offset[1]) or 0.0
 
-    # (b) zona morta radial
-    magnitude = math.hypot(b, g)
+    # (a)+(b) offset de calibração e derivação yaw/pitch da ponta
+    if a is None or alpha0 is None:
+        yaw_right = 0.0  # sem yaw do sensor: eixo horizontal degrada para 0
+    else:
+        yaw_right = _wrap_180(-(a - alpha0))
+    pitch_up = _wrap_180(b - beta0)
+
+    # (c) zona morta radial
+    magnitude = math.hypot(yaw_right, pitch_up)
     if magnitude <= dead_zone_deg:
         return (0.0, 0.0)
 
-    # (c)+(d) curva de sensibilidade e saturação suave sobre a magnitude
+    # (d)+(e) curva de sensibilidade e saturação suave sobre a magnitude
     usable = max_angle_deg - dead_zone_deg
     if usable <= 0:
         return (0.0, 0.0)
     normalized = (magnitude - dead_zone_deg) / usable
     scaled = _shape(normalized, sensitivity)
 
-    # Projeta de volta na direção original, preservando simetria (M5)
-    x = (g / magnitude) * scaled
-    y = (b / magnitude) * scaled
+    # Projeta de volta na direção apontada, preservando simetria (M5)
+    x = (yaw_right / magnitude) * scaled
+    y = (pitch_up / magnitude) * scaled
     return (min(1.0, max(-1.0, x)), min(1.0, max(-1.0, y)))
 
 

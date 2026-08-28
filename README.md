@@ -1,11 +1,23 @@
 # wii-controller
 
-Transforma um celular Android em um gamepad estilo Wii Remote para PC:
-inclinação vira eixo analógico, tela vira botões touch, e o PC enxerga um
-gamepad XInput (Xbox 360) padrão. Conexão exclusivamente por Wi-Fi local, via
-página web servida pelo próprio PC — sem app, sem build.
+Transforma um celular Android em um controle estilo Wii Remote para PC: o
+aparelho é segurado **em pé, de uma mão** (pegada vertical), com um "emissor
+infravermelho imaginário" no topo — **onde a ponta aponta, a mira está**
+(apontamento absoluto). A tela vira o corpo do controle com botões touch, e o
+PC enxerga um gamepad XInput (Xbox 360) padrão. Conexão exclusivamente por
+Wi-Fi local, via página web servida pelo próprio PC — sem app, sem build.
 
 Especificações completas em `specs/wii-controller/`.
+
+## Limitação conhecida: jogos de terceiros
+
+O eixo do analógico direito transporta uma **posição apontada** (F4): centro
+calibrado = (0, 0) = centro da tela; ±1.0 = bordas. Os jogos próprios (Duck
+Shooting e Fruit Ninja) consomem esse valor **como posição**. Jogos de
+**terceiros**, por convenção XInput, interpretam o analógico direito como
+**taxa** (velocidade de câmera/cursor) — neles a sensação continuará sendo de
+cursor por velocidade. Isso é limitação conhecida e documentada, não defeito;
+perfis de mapeamento por jogo (segunda onda) são o caminho futuro.
 
 ## Pré-requisitos
 

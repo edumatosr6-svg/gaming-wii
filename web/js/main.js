@@ -24,6 +24,7 @@ const debugLine = document.getElementById('debug-line');
 const calibrateButton = document.getElementById('calibrate-button');
 const padScreen = document.getElementById('pad-screen');
 const rotateHint = document.getElementById('rotate-hint');
+const sensorTip = document.getElementById('sensor-tip');
 
 let stopMotion = null;
 let reconnectTimer = null;
@@ -41,6 +42,9 @@ function setScreen(state) {
   for (const element of screenElements) {
     element.hidden = element.dataset.screen !== state;
   }
+  // Ponta do sensor (F2.11/W23): aparência distinta por estado de
+  // ClientViewState — o "LED infravermelho" reflete a conexão/mira.
+  sensorTip.dataset.connState = state;
 }
 
 // O estado da conexão fica visível em 100% do tempo (F9.6): a faixa de status
@@ -150,7 +154,8 @@ const connection = createConnection({
 // --- Modo imersivo (F2.8) ---------------------------------------------------
 
 async function enterImmersiveMode() {
-  // Fullscreen + paisagem (F2.2); se o lock falhar, orienta visualmente.
+  // Fullscreen + RETRATO (F2.2 — pegada vertical de Wii Remote); se o lock
+  // falhar (restrição do navegador), orienta visualmente a manter em pé.
   try {
     if (!document.fullscreenElement) {
       await document.documentElement.requestFullscreen();
@@ -159,10 +164,10 @@ async function enterImmersiveMode() {
     // fullscreen negado: segue funcional
   }
   try {
-    await screen.orientation.lock('landscape');
+    await screen.orientation.lock('portrait');
     rotateHint.hidden = true;
   } catch {
-    rotateHint.hidden = false; // pede para girar o aparelho manualmente
+    rotateHint.hidden = false; // pede para manter o aparelho em pé
   }
 }
 

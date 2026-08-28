@@ -5,7 +5,7 @@ Tabela de mensagens (software-specs.md, Data Models):
 | type        | direção            | campos                                        |
 |-------------|--------------------|-----------------------------------------------|
 | `hello`     | servidor→cliente   | `session_id: str`, `server_version: str`      |
-| `motion`    | cliente→servidor   | `b: float`, `g: float`, `t: float`            |
+| `motion`    | cliente→servidor   | `a: float|null`, `b: float`, `g: float`, `t: float` |
 | `button`    | cliente→servidor   | `id: str` (enum), `down: bool`                |
 | `calibrate` | cliente→servidor   | —                                             |
 | `vibrate`   | servidor→cliente   | `intensity: float [0..1]`, `duration_ms: int` |
@@ -32,8 +32,14 @@ BUTTON_IDS: frozenset[str] = frozenset(
 
 @dataclass(frozen=True)
 class Motion:
-    """Amostra de orientação (graus) com timestamp do cliente (ms)."""
+    """Amostra de orientação (graus) com timestamp do cliente (ms).
 
+    ``a`` (alpha/yaw) pode ser ``None`` quando o sensor não reporta yaw — os
+    três ângulos são necessários para derivar a direção da ponta na pegada
+    vertical (F4), e a ausência de alpha degrada o eixo horizontal (M8b).
+    """
+
+    a: float | None
     b: float
     g: float
     t: float
@@ -104,12 +110,15 @@ def parse_message(raw: str | bytes) -> Message | None:
 
     msg_type = data.get("type")
     if msg_type == "motion":
+        # `a` é opcional/anulável (sensor sem yaw — F4/M8b); valor inválido
+        # degrada para None em vez de descartar a amostra inteira.
+        a = _as_float(data.get("a"))
         b = _as_float(data.get("b"))
         g = _as_float(data.get("g"))
         t = _as_float(data.get("t"))
         if b is None or g is None or t is None:
             return None
-        return Motion(b=b, g=g, t=t)
+        return Motion(a=a, b=b, g=g, t=t)
 
     if msg_type == "button":
         button_id = data.get("id")

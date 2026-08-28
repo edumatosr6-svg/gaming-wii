@@ -20,12 +20,12 @@ import {
   WORLD,
 } from './entities.js';
 import { sampleInput } from './input.js';
+import { crosshairFromAxes } from './aim.js';
 import { drawFrame, drawMessage } from './render.js';
 import { playShot, playHit, playEscape, playEmpty } from './audio.js';
 import { rumble } from './rumble-fallback.js';
 
 const FIXED_DT = 1 / 120; // passo fixo da física (s)
-const CROSSHAIR_SPEED = 0.9; // fração da tela por segundo com eixo a fundo
 const OVERLAY_POLL_MS = 1000; // leitura de /metrics a 1 Hz (F11)
 
 export function startGame(canvas) {
@@ -92,17 +92,7 @@ export function startGame(canvas) {
     }
   }
 
-  function stepPhysics(dt, input) {
-    // Mira movida pelo analógico direito (tilt do celular)
-    const nx = state.crosshair.x + input.axisX * CROSSHAIR_SPEED * dt;
-    const ny = state.crosshair.y + input.axisY * CROSSHAIR_SPEED * dt;
-    state = {
-      ...state,
-      crosshair: {
-        x: Math.min(1, Math.max(0, nx)),
-        y: Math.min(1, Math.max(0, ny)),
-      },
-    };
+  function stepPhysics(dt) {
     if (state.phase !== 'playing') {
       return;
     }
@@ -124,6 +114,14 @@ export function startGame(canvas) {
 
   function frame(nowMs) {
     const input = sampleInput();
+    // Mira ABSOLUTA (F10.10, contrato com F4): posição = função pura da
+    // leitura atual do eixo normalizado + geometria — nunca da posição
+    // anterior. Integrar velocidade aqui é proibido (F10.7/KPI-16).
+    const aimPx = crosshairFromAxes(input.axisX, input.axisY, WORLD.width, WORLD.height);
+    state = {
+      ...state,
+      crosshair: { x: aimPx.x / WORLD.width, y: aimPx.y / WORLD.height },
+    };
     frameCount += 1;
     if (nowMs - fpsWindowStart >= 1000) {
       overlay.fps = (frameCount * 1000) / (nowMs - fpsWindowStart);
@@ -156,7 +154,7 @@ export function startGame(canvas) {
     lastFrameMs = nowMs;
     accumulator += frameDt;
     while (accumulator >= FIXED_DT) {
-      stepPhysics(FIXED_DT, input);
+      stepPhysics(FIXED_DT);
       accumulator -= FIXED_DT;
     }
 
@@ -167,7 +165,7 @@ export function startGame(canvas) {
       drawMessage(
         ctx,
         'Calibração',
-        'Segure o celular na posição neutra, toque em CALIBRAR no celular e aperte A com a mira estável'
+        'Segure o celular EM PÉ apontando para a tela (como um Wii Remote), toque em CALIBRAR e aperte A com a mira estável no centro'
       );
     } else if (state.phase === 'roundEnd') {
       drawMessage(ctx, `Rodada ${state.round - 1} concluída!`, 'Prepare-se…');

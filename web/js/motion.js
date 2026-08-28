@@ -1,4 +1,11 @@
-// Leitura e throttle do giroscópio (F4). Lógica pura exportada para testes.
+// Leitura e throttle do sensor de orientação (F4). Lógica pura exportada
+// para testes. Pegada VERTICAL (retrato): o aparelho é segurado em pé como um
+// Wii Remote e a amostra vai CRUA para o servidor — os três ângulos do
+// DeviceOrientationEvent (alpha/beta/gamma) são necessários para derivar a
+// direção da ponta, e é o `mapping.py` do servidor que converte em posição
+// apontada. Nenhum ajuste de paisagem aqui: o antigo `adjustForLandscape` era
+// do layout de paisagem e produziria eixo trocado/invertido na pegada
+// vertical (F4 — "Atenção herdada da revisão").
 
 // Cria o throttle de amostras de orientação para MOTION_SEND_HZ (padrão 60).
 // push(sample, nowMs) devolve a amostra quando ela deve ser enviada, ou null
@@ -19,19 +26,16 @@ export function createMotionThrottle(hz) {
 }
 
 // Constrói a mensagem `motion` do protocolo (nomes curtos de propósito).
-export function buildMotionMessage(beta, gamma, timestampMs) {
-  return { type: 'motion', b: beta, g: gamma, t: timestampMs };
-}
-
-// Ajusta beta/gamma do DeviceOrientationEvent para o aparelho em paisagem:
-// em landscape-primary o eixo físico frente-trás vira gamma e o
-// esquerda-direita vira beta (com sinal dependente do lado da rotação).
-export function adjustForLandscape(beta, gamma, orientationType) {
-  if (orientationType === 'landscape-secondary') {
-    return { b: -gamma, g: beta };
-  }
-  // landscape-primary (padrão do fluxo; retrato não é suportado no uso)
-  return { b: gamma, g: -beta };
+// `alpha` pode ser null quando o sensor não reporta yaw (contrato W3/M8b);
+// a calibração do servidor absorve o zero arbitrário de alpha (F4/F5).
+export function buildMotionMessage(alpha, beta, gamma, timestampMs) {
+  return {
+    type: 'motion',
+    a: typeof alpha === 'number' && Number.isFinite(alpha) ? alpha : null,
+    b: beta,
+    g: gamma,
+    t: timestampMs,
+  };
 }
 
 // Liga a leitura real do sensor (só chamado no navegador, não nos testes).
@@ -41,10 +45,8 @@ export function startMotion(sendFn, hz, nowFn = () => performance.now()) {
     if (event.beta === null || event.gamma === null) {
       return;
     }
-    const orientationType = screen.orientation ? screen.orientation.type : '';
-    const adjusted = adjustForLandscape(event.beta, event.gamma, orientationType);
     const now = nowFn();
-    const sample = throttle.push(buildMotionMessage(adjusted.b, adjusted.g, now), now);
+    const sample = throttle.push(buildMotionMessage(event.alpha, event.beta, event.gamma, now), now);
     if (sample !== null) {
       sendFn(sample);
     }
