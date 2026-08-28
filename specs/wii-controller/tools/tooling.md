@@ -86,6 +86,9 @@ Automatizadas como testes (rodam no `pytest -q`):
    acontecer.
 10. **`localStorage` com lista fechada de duas chaves** (endereço e perfil de alcances,
     F3.5/F12.8): qualquer terceira chave reprova.
+11. **Sem chamada de rede na geração do QR** (F1.8): a inicialização do servidor com
+    acesso à internet bloqueado no ambiente de teste ainda produz o QR corretamente —
+    prova que a biblioteca escolhida não depende de um serviço externo de geração.
 
 ## Scripts utilitários
 

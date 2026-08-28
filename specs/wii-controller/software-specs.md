@@ -54,6 +54,33 @@ Um único processo Python 3.11+ assíncrono que serve os arquivos estáticos de 
     PC), com porta.
   - HTTP e WebSocket compartilham a mesma porta (padrão definida em `config.py`,
     sobrescrevível por argumento de linha de comando `--port`).
+  - **QR code de pareamento (revisão humana — atalho para digitar o IP).** Junto das
+    URLs impressas, o servidor renderiza um **QR code que codifica exatamente a URL do
+    controle** (a mesma string impressa, `https://<ip-local>:<porta>/`) — nunca uma URL
+    derivada ou abreviada. A forma de renderização é escolha do impl-loop entre duas
+    opções equivalentes para efeito de critério de aceite:
+    - **ASCII no terminal**: impresso diretamente após as URLs, na mesma execução, sem
+      arquivo intermediário; ou
+    - **Imagem** (arquivo local, ex. PNG): gerada/sobrescrita no mesmo diretório a cada
+      start, com o **caminho do arquivo impresso no terminal** junto das URLs — o
+      usuário precisa saber onde olhar sem procurar.
+    O **campo de IP manual (F3) não é substituído**: continua existindo como caminho de
+    exceção (rede sem câmera disponível, celular já pareado antes, página aberta fora do
+    servidor). O QR é um atalho para o mesmo fluxo, não um caminho novo de conexão.
+    - **Geração local, sem serviço de terceiros pela rede** (mesma regra de "sem
+      dependência de internet" do restante do projeto — `references/`,
+      `tools/dependencies.md`): a biblioteca de geração de QR roda inteiramente no
+      processo do servidor, sem chamada HTTP a um gerador de QR externo. Isso vale tanto
+      para desenvolvimento quanto para runtime.
+    - **Regeneração correta entre interfaces.** Se a máquina tiver múltiplas interfaces
+      de rede (e portanto múltiplos IPs candidatos — já descoberto por F1 acima) ou se a
+      porta mudar (`--port`), o QR gerado a cada start reflete **o mesmo IP:porta que
+      está nas URLs impressas naquele start** — nunca um valor em cache de um start
+      anterior nem um IP de uma interface diferente da usada nas URLs.
+    - Falha na geração do QR (biblioteca ausente, erro de renderização) **não aborta o
+      servidor**: degrada para as URLs impressas normalmente (F3 continua disponível),
+      com um aviso no terminal nomeando a causa — "falhar suave", mesma política do
+      restante do F1.
   - **Estratégia de contexto seguro (decisão):** o servidor serve a página do controle
     por **HTTPS com certificado autoassinado**, gerado automaticamente no primeiro start
     e reutilizado nos seguintes (arquivo local). O usuário aceita o aviso do navegador
@@ -80,6 +107,18 @@ Um único processo Python 3.11+ assíncrono que serve os arquivos estáticos de 
      descartada.
   5. Nenhum módulo fora de `server/gamepad/` importa a biblioteca de gamepad virtual
      (verificável por inspeção estática dos imports).
+  6. **QR code presente e correto:** ao iniciar o servidor, decodificar o QR exibido
+     (ASCII capturado da saída do terminal, ou a imagem no caminho impresso) produz uma
+     string **idêntica** à URL do controle impressa no mesmo start.
+  7. **Regeneração por IP/porta:** iniciar o servidor com `--port` diferente, ou
+     simulando uma segunda interface de rede com IP diferente, produz um QR cujo
+     conteúdo decodificado reflete o **novo** IP:porta — nunca o do start anterior.
+  8. **Sem chamada de rede para gerar o QR:** capturar as requisições de rede feitas
+     pelo processo do servidor durante a inicialização (start a start) não mostra
+     nenhuma chamada a domínio de terceiros para geração/renderização do QR.
+  9. **Fallback intacto:** com a biblioteca de QR indisponível/forçada a falhar, o
+     servidor continua subindo normalmente, imprime as URLs (critério 1) e emite um
+     aviso nomeando a causa da falha do QR — sem exceção não tratada.
 
 ### F2 — Cliente web do controle (celular)
 
@@ -219,7 +258,10 @@ no navegador Chromium do celular.
     fricção desnecessária e fonte de erro.
   - A tela de pareamento manual permanece como caminho de exceção — para o caso de a
     página ser aberta fora do servidor (arquivo local) ou de o usuário precisar apontar
-    para outro host. Nela, o último endereço usado com sucesso é salvo em
+    para outro host. O **QR code de pareamento** (F1) é um atalho para esse mesmo fluxo
+    — escanear abre a mesma URL que o campo manual aceitaria digitada — e não é uma
+    forma alternativa de conexão nem um caminho que dispensa este campo. Nela, o último
+    endereço usado com sucesso é salvo em
     `localStorage` e pré-preenchido. **Usos permitidos de `localStorage` (lista
     fechada): o último endereço e o perfil de alcances da calibração guiada (F12).**
     Estado de jogo continua proibido.
@@ -1219,6 +1261,11 @@ Interface abstrata; a implementação concreta é escolhida em runtime pela plat
 Rede e ciclo de vida: `PORT`, `MOTION_SEND_HZ`, `PING_INTERVAL_S`, `PING_TIMEOUT_S`,
 `TILT_TARGET_AXIS`, `MAX_MESSAGE_BYTES`, `METRICS_WINDOW_SIZE`.
 
+Pareamento (F1 — QR code): `QR_ENABLED` (padrão `True` — falha de geração não desliga o
+resto do F1, só o próprio QR, ver F1.9); `QR_FORMAT` (`ascii` ou `image`, escolha do
+impl-loop, documentada no README); quando `image`, `QR_IMAGE_PATH` (caminho local do
+arquivo regenerado a cada start, impresso no terminal junto das URLs).
+
 Mapeamento **por eixo** (F4 — substitui `DEAD_ZONE_DEG`/`SENSITIVITY` únicos):
 
 | Constante | Padrão | Faixa | Justificativa |
@@ -1314,6 +1361,7 @@ banco de testes. KPIs de hardware real são verificados manualmente com o overla
 | KPI-22 Melhoria medida da deriva com fusão + rejeição magnética | F13, F14 | deriva horizontal de 15 min medida em **duas condições na mesma sessão de teste** (`?src=deviceorientation` e `?src=fusion_mag`): a deriva com fusão é **estritamente menor** em graus. A comparação é medida, não intuída; se não melhorar, a frente 4 reprova | procedimento manual comparativo L16 (tests/latency-and-kpis.md), usando os graus registrados no KPI-4 |
 | KPI-23 Escada de degradação utilizável e visível | F13 | degrau em uso exibido na tela em 100% do tempo conectado (0 casos de fonte desconhecida) e **partida completa jogável no pior degrau** (`?src=deviceorientation`), inclusive em aparelho sem magnetômetro | teste automatizado W25 (tests/client-controller.md) + procedimento manual W28m |
 | KPI-24 Eficácia da rejeição magnética | F14 | em fluxo sintético com trecho de interferência, o erro de yaw ao fim do trecho é **estritamente menor** com rejeição ligada do que desligada, e ≤ 5° em valor absoluto | teste automatizado JS PC12 (tests/pointing-client.md) |
+| KPI-25 Ganho do QR no pareamento inicial | F1 | **automatizado:** o QR decodificado a cada start é **idêntico** à URL impressa no mesmo start, inclusive após mudar porta/interface (0 divergências); **manual, com pessoa que nunca usou o produto:** do QR exibido no terminal até o estado `conectado` no celular, escaneando, em **< 10 s** — comparado ao tempo digitando o IP manualmente (F3), que serve de linha de base | teste automatizado C6b (tests/connection-lifecycle.md, decodifica o QR gerado) + cronometragem manual comparativa C11 (tests/connection-lifecycle.md) |
 
 Sem KPI artificial: taxa de acerto no Duck Shooting é usada como **métrica comparativa
 entre versões** (regressão de qualidade de controle), não como meta absoluta — o

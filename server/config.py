@@ -16,6 +16,18 @@ pré-valida para evitar uma ida ao servidor só para receber um "não").
 PORT: int = 8443
 
 # --------------------------------------------------------------------------
+# QR code de pareamento (F1) — mesma URL do controle impressa nas URLs
+# --------------------------------------------------------------------------
+# Falha na geração (biblioteca ausente, erro de renderização) nunca desliga o
+# resto do F1: degrada para as URLs impressas normalmente (F1.9).
+QR_ENABLED: bool = True
+# "ascii" (impresso direto no terminal, sem arquivo) ou "image" (arquivo local
+# em QR_IMAGE_PATH, regenerado a cada start, caminho impresso no terminal).
+QR_FORMAT: str = "ascii"
+# Caminho relativo à raiz do projeto, usado apenas quando QR_FORMAT == "image".
+QR_IMAGE_PATH: str = "server/qr-pairing.png"
+
+# --------------------------------------------------------------------------
 # Mapeamento de apontamento (F4 — pegada vertical, modelo do "infravermelho")
 # --------------------------------------------------------------------------
 # ZONA MORTA POR EIXO (substitui a zona morta radial única). A assimetria tem

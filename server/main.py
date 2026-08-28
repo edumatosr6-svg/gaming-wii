@@ -27,7 +27,7 @@ if __package__ in (None, ""):
     # Permite `python server/main.py` direto, sem instalar o pacote (P1).
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from server import config, mapping, protocol  # noqa: E402
+from server import config, mapping, protocol, qr  # noqa: E402
 from server.gamepad import NullGamepad, select_gamepad  # noqa: E402
 from server.gamepad.base import GamepadUnavailableError, VirtualGamepad  # noqa: E402
 from server.metrics import MetricsWindow  # noqa: E402
@@ -245,6 +245,10 @@ def print_urls(port: int) -> None:
         print(f"  Controle (celular): https://{ip}:{port}/")
     print(f"  Jogo (PC):          https://localhost:{port}/game/")
     print("  (aceite o aviso do certificado autoassinado na primeira visita)")
+    if config.QR_ENABLED:
+        # A mesma URL impressa acima para a primeira interface (F1.6/F1.7):
+        # nunca um valor derivado, abreviado ou em cache de um start anterior.
+        qr.generate_and_print(f"https://{ips[0]}:{port}/")
 
 
 async def _amain(args: argparse.Namespace) -> None:

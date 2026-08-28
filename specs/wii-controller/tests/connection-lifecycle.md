@@ -1,4 +1,4 @@
-# Testes — Ciclo de vida da conexão [F9, F3, KPI-5, KPI-6]
+# Testes — Ciclo de vida da conexão [F9, F3, F1, KPI-5, KPI-6, KPI-25]
 
 Automatizados com `pytest -q` + WebSocket em loopback + gamepad fake, exceto onde
 marcado como **[manual/hardware]**.
@@ -38,6 +38,23 @@ marcado como **[manual/hardware]**.
   Dado a plataforma reportando driver indisponível (simulado no seletor de
   implementação), quando o servidor inicia, então termina com exit code ≠ 0 e a
   mensagem cita o driver e onde obtê-lo (critério F7.2).
+- **C6b — QR code decodifica para a URL impressa**
+  Dado o servidor iniciado em porta livre, quando se captura o QR exibido (ASCII lido
+  da saída do terminal, ou a imagem no caminho impresso) e se decodifica com uma
+  biblioteca de leitura de QR, então o conteúdo decodificado é **exatamente igual** à
+  URL do controle impressa no mesmo start (critério F1.6). Repetir iniciando com
+  `--port` diferente e/ou uma segunda interface de rede simulada (IP diferente): o novo
+  QR decodifica para o novo IP:porta, nunca para o do start anterior (critério F1.7,
+  KPI-25 parte automatizada).
+- **C6c — Nenhuma chamada de rede para gerar o QR**
+  Dado o servidor iniciado com acesso à internet bloqueado no ambiente de teste, quando
+  o QR é gerado, então a geração conclui normalmente (critério F1.8) — prova que a
+  biblioteca de QR não depende de serviço de terceiros pela rede.
+- **C6d — Falha na geração do QR não derruba o servidor**
+  Dado a biblioteca/renderização de QR forçada a falhar (dublê de erro), quando o
+  servidor inicia, então ele sobe normalmente, imprime as URLs (critério F1.1) e emite
+  um aviso no terminal nomeando a causa da falha do QR, sem exceção não tratada
+  (critério F1.9). O campo de IP manual (F3) continua funcional nesse cenário.
 
 ## Manuais / hardware [manual/hardware]
 
@@ -53,3 +70,10 @@ marcado como **[manual/hardware]**.
 - **C10 — Estabilidade de sessão (KPI-11)**: sessão contínua de 30 min jogando Duck
   Shooting; registrar quedas de conexão e inputs travados. Aprovado com 0 ocorrências
   de ambos.
+- **C11 — Pareamento inicial via QR vs. digitação manual (KPI-25)**: com uma pessoa que
+  nunca usou o produto, cronometrar (a) do QR exibido no terminal até o celular no
+  estado `conectado`, escaneando com a câmera, e (b) do IP exibido até `conectado`,
+  digitando manualmente no campo da F3. *Observar:* (a) fica abaixo de 10 s e é
+  perceptivelmente mais rápido e com menos erro de digitação que (b); nenhum dos dois
+  caminhos fica indisponível durante o teste (F3 continua funcional mesmo com o QR
+  presente).

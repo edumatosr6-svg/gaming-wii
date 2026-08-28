@@ -23,6 +23,21 @@ body {
   display: block;
 }
 
+#back-to-hub {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #cfd3ff;
+  background: rgba(11, 13, 22, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  text-decoration: none;
+}
+
 /* As quatro telas são mutuamente exclusivas: `hidden` remove do layout, e é
    isso que a checagem de geometria de B10 observa. */
 .screen[hidden] {
