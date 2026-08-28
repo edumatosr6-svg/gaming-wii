@@ -77,9 +77,15 @@ tela, devolve posição).
 
 - **G15 — Fluxo de entrada**: primeira execução guia a calibração antes da rodada 1,
   instruindo a segurar o aparelho **em pé apontando para a tela** (pegada vertical), e
-  confirma mira estável no centro (F10, P4.2). *Observar:* com o aparelho na posição
-  neutra calibrada, a mira está no centro; apontar a ponta para um canto leva a mira
-  àquele canto; voltar ao neutro **recentra** a mira (não apenas a para onde estava).
+  confirma mira estável no centro (F10, P4.2). Na **primeira entrada** o celular roda o
+  assistente de alcance (F12/P6) antes disso; nas seguintes, só a captura de centro
+  (F5), porque os alcances ficaram lembrados no aparelho. *Observar:* com o aparelho na
+  posição neutra calibrada, a mira está no centro; apontar a ponta para um canto leva a
+  mira àquele canto; voltar ao neutro **recentra** a mira (não apenas a para onde
+  estava).
+- **G15b — Overlay mostra precisão e fonte (F11.5)**: com o overlay ativo. *Observar:*
+  `tremor_x` e `tremor_y` aparecem **separados** e o degrau de fonte de orientação em
+  uso é legível na tela do jogo, junto das métricas de latência.
 - **G16 — Rumble na mecânica**: disparo vibra curto (coice); acerto vibra com padrão
   distinto e distinguível (critério F8.4); com `GamepadHapticActuator` indisponível,
   o fallback `POST /rumble` assume sem mudança perceptível na jogabilidade (F8.3).

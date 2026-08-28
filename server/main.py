@@ -123,12 +123,22 @@ async def _handle_session(app: App, websocket: ServerConnection) -> None:
             if isinstance(message, protocol.Motion):
                 arrival = time.perf_counter()
                 app.metrics.record_motion()
-                session.handle_motion(message)
+                session.handle_motion(message, arrival_ms=arrival * 1000.0)
                 app.metrics.record_processing((time.perf_counter() - arrival) * 1000.0)
             elif isinstance(message, protocol.Button):
                 session.handle_button(message)
             elif isinstance(message, protocol.Calibrate):
-                session.handle_calibrate(message)
+                # A resposta é obrigatória (F12/P6.5): o assistente do cliente
+                # aguarda `calibration_applied` e um perfil rejeitado precisa
+                # chegar com motivo, nunca ser engolido (KPI-14).
+                outcome = session.handle_calibrate(message)
+                await websocket.send(
+                    protocol.calibration_applied_message(
+                        outcome.accepted, outcome.reason, outcome.ranges, outcome.has_center
+                    )
+                )
+            elif isinstance(message, protocol.Status):
+                session.handle_status(message)
             elif isinstance(message, protocol.Pong):
                 last_pong = time.monotonic()
                 rtt = time.monotonic() * 1000.0 - message.t

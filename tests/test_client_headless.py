@@ -49,7 +49,11 @@ ROOT = Path(__file__).resolve().parent.parent
 WEB_JS_DIR = ROOT / "web" / "js"
 
 # Contrato do DOM lido por estes testes (mantido em web/index.html).
-SCREEN_STATES = ("pareamento", "conectando", "conectado", "desconectado")
+# CINCO estados desde a revisão de precisão: `calibrando` é o assistente de
+# alcance guiado (F12), e é onde a PRIMEIRA entrada cai quando não há perfil
+# salvo no aparelho (transição de ClientViewState).
+SCREEN_STATES = ("pareamento", "conectando", "conectado", "calibrando", "desconectado")
+WIZARD_STEPS = ("neutro", "esquerda", "direita", "cima", "baixo")
 BUTTON_IDS = (
     "a",
     "b",
@@ -64,7 +68,18 @@ BUTTON_IDS = (
     "start",
     "back",
 )
-BANNER_IDS = ("error-banner", "status-banner", "rotate-hint", "debug-line")
+BANNER_IDS = ("error-banner", "status-banner", "source-banner", "rotate-hint", "debug-line")
+
+# Perfil de alcances já "lembrado no aparelho" (F12.6). Semeá-lo em
+# `localStorage` antes da carga é o que reproduz uma SEGUNDA sessão, que é o
+# caminho especificado para entrar direto em `conectado`: sem perfil salvo, a
+# primeira entrada vai para `calibrando` por definição da máquina de estados.
+RANGES_STORAGE_KEY = "wii-controller.ranges-profile"
+SAVED_PROFILE = {
+    "schemaVersion": 1,
+    "createdAt": 0,
+    "ranges": {"left": 20.0, "right": 20.0, "up": 20.0, "down": 20.0},
+}
 
 # Viewport RETRATO obrigatório (tools/tooling.md): o aparelho de referência em
 # pé. Medir geometria em paisagem valida um layout que não existe mais e
@@ -168,7 +183,20 @@ class Controller:
         return sorted(name for name, area in areas.items() if area > 0)
 
     async def wait_state(self, state: str, timeout: float = 8000) -> None:
-        await self.page.wait_for_selector(f'#status-banner[data-state="{state}"]', timeout=timeout)
+        """Espera o ESTADO DE TELA (ClientViewState), não o da conexão.
+
+        Os dois são independentes por especificação: `calibrando` acontece com
+        `link == online`, então a faixa de status continua marcando `conectado`
+        durante o assistente. Esperar pela faixa confundiria os dois eixos e
+        nunca veria `calibrando` — a tela visível é a fonte correta.
+        """
+        await self.page.wait_for_selector(
+            f'#screens [data-screen="{state}"]', state="visible", timeout=timeout
+        )
+
+    async def wait_link(self, link: str, timeout: float = 8000) -> None:
+        """Espera o estado da CONEXÃO (faixa persistente de status, F9.6)."""
+        await self.page.wait_for_selector(f'#status-banner[data-state="{link}"]', timeout=timeout)
 
     async def tap(self, selector: str) -> None:
         """Sequência de toque completa, sem nenhum evento `click` sintético."""
@@ -190,7 +218,9 @@ class Controller:
         return out
 
 
-async def _open_controller(browser, server: ServerHandle, *, goto: bool = True) -> Controller:
+async def _open_controller(
+    browser, server: ServerHandle, *, goto: bool = True, query: str = ""
+) -> Controller:
     context = await browser.new_context(has_touch=True, viewport=dict(PORTRAIT_VIEWPORT))
     page = await context.new_page()
     controller = Controller(page=page, server=server)
@@ -209,6 +239,9 @@ async def _open_controller(browser, server: ServerHandle, *, goto: bool = True) 
     await page.add_init_script("""
         const originalSend = WebSocket.prototype.send;
         WebSocket.prototype.send = function (data) {
+          // Guarda o socket do controle para os casos que precisam injetar uma
+          // mensagem do servidor (ex.: W26c, rejeição de calibração).
+          window.__controllerSocket = this;
           try { window.__recordSent(String(data)); } catch (e) { /* ignora */ }
           return originalSend.call(this, data);
         };
@@ -229,8 +262,22 @@ async def _open_controller(browser, server: ServerHandle, *, goto: bool = True) 
         }, true);
         """)
     if goto:
-        await page.goto(server.url)
+        await page.goto(server.url + query)
     return controller
+
+
+async def _seed_saved_profile(controller: Controller) -> None:
+    """Grava o perfil de alcances e recarrega, simulando a SEGUNDA sessão.
+
+    Sem isto o cliente cai em `calibrando` na primeira entrada — que é o
+    comportamento correto (F12), não um defeito. Os testes que medem a tela
+    `conectado` precisam entrar nela pelo caminho que a spec define.
+    """
+    await controller.page.evaluate(
+        "([k, v]) => localStorage.setItem(k, JSON.stringify(v))",
+        [RANGES_STORAGE_KEY, SAVED_PROFILE],
+    )
+    await controller.page.reload()
 
 
 @pytest.fixture
@@ -241,16 +288,57 @@ async def controller(browser, live_http_server):
 
 @pytest.fixture
 async def connected_controller(controller: Controller):
+    await controller.wait_state("calibrando")
+    await _seed_saved_profile(controller)
     await controller.wait_state("conectado")
     controller.sent.clear()
     return controller
 
 
+# ---- fonte de orientação `synthetic` (F13, degrau de diagnóstico) ----------
+# O navegador headless não tem sensores. Sem esta costura — que é do PRÓPRIO
+# produto, o mesmo `?src=` usado para diagnóstico no aparelho — o assistente de
+# calibração, o indicador de fonte e o de interferência ficariam sem cobertura
+# automatizada nenhuma.
+
+
+async def _push_orientation(controller: Controller, alpha, beta, gamma=0.0, n=40, gap_ms=15):
+    """Injeta N amostras de orientação estáveis pela fonte sintética."""
+    for _ in range(n):
+        await controller.page.evaluate(
+            "([a, b, g]) => window.wiiControllerSynthetic.push({alpha: a, beta: b, gamma: g})",
+            [alpha, beta, gamma],
+        )
+        await controller.page.wait_for_timeout(gap_ms)
+
+
+async def _push_sensors(controller: Controller, sample, n=40, gap_ms=10):
+    """Injeta N amostras de SENSOR CRU, que passam pela fusão real do cliente."""
+    for _ in range(n):
+        await controller.page.evaluate("(s) => window.wiiControllerSynthetic.push(s)", sample)
+        await controller.page.wait_for_timeout(gap_ms)
+
+
+@pytest.fixture
+async def synthetic_controller(browser, live_http_server):
+    """Controle com a fonte forçada em `synthetic` e o perfil já lembrado."""
+    instance = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await instance.wait_state("calibrando")
+    await instance.page.evaluate(
+        "([k, v]) => localStorage.setItem(k, JSON.stringify(v))",
+        [RANGES_STORAGE_KEY, SAVED_PROFILE],
+    )
+    await instance.page.reload()
+    await instance.wait_state("conectado")
+    instance.sent.clear()
+    return instance
+
+
 # ------------------------------------------------------- W11: uma tela por vez
 
 
-async def test_w11_uma_tela_por_vez_nos_quatro_estados(browser, live_http_server):
-    """W11: em cada um dos 4 estados, exatamente uma tela tem área > 0 (F2.5).
+async def test_w11_uma_tela_por_vez_nos_cinco_estados(browser, live_http_server):
+    """W11: em cada um dos 5 estados, exatamente uma tela tem área > 0 (F2.5).
 
     Pega o caso de uma regra de CSS anular o mecanismo de alternância — a tela
     de pareamento permanecia sobre um controle já conectado e funcional.
@@ -258,7 +346,12 @@ async def test_w11_uma_tela_por_vez_nos_quatro_estados(browser, live_http_server
     controller = await _open_controller(browser, live_http_server)
     observed: dict[str, list[str]] = {}
 
-    # conectado — a conexão é automática (F3.1)
+    # calibrando — PRIMEIRA entrada, sem perfil salvo (F12/ClientViewState)
+    await controller.wait_state("calibrando")
+    observed["calibrando"] = await controller.visible_screens()
+
+    # conectado — segunda sessão, com o perfil de alcances lembrado (F12.6)
+    await _seed_saved_profile(controller)
     await controller.wait_state("conectado")
     observed["conectado"] = await controller.visible_screens()
 
@@ -305,19 +398,32 @@ async def test_w12_todos_os_botoes_respondem_ao_toque(connected_controller: Cont
     assert ghost_clicks == [], f"controles acionados por `click`, não por toque: {ghost_clicks}"
 
 
-async def test_w13_calibrar_responde_ao_toque(connected_controller: Controller):
-    """W13: o comando de calibrar envia `calibrate` por toque puro (F2.6).
+async def test_w13_calibrar_responde_ao_toque(synthetic_controller: Controller):
+    """W13 (F2.6): o toque INICIA a captura; `calibrate` sai ao FIM da janela.
 
-    O comando esteve ligado apenas a `click`, que o tratamento multi-touch
-    suprime: funcionava com mouse e era inerte no celular.
+    A mensagem não sai no toque: ela carrega a MÉDIA de uma janela de amostras
+    (F5). Um `calibrate` imediato seria a calibração por amostra instantânea
+    que esta revisão remove — por isso o caso mede as duas coisas, que o toque
+    não envia nada na hora e que a mensagem sai depois, com `center`.
     """
-    controller = connected_controller
+    controller = synthetic_controller
     await controller.tap("#calibrate-button")
-    await controller.page.wait_for_timeout(200)
+    await controller.page.wait_for_timeout(100)
+    assert controller.messages_of_type("calibrate") == [], (
+        "`calibrate` saiu no toque, antes da janela de captura — seria a "
+        "calibração por amostra instantânea que a F5 proíbe"
+    )
 
-    assert (
-        len(controller.messages_of_type("calibrate")) == 1
-    ), f"mensagens enviadas: {controller.sent}"
+    await _push_orientation(controller, alpha=137.0, beta=11.0)
+    await controller.page.wait_for_timeout(300)
+
+    enviados = controller.messages_of_type("calibrate")
+    assert len(enviados) == 1, f"mensagens enviadas: {controller.sent}"
+    centro = enviados[0].get("center")
+    assert centro is not None, "o `calibrate` do comando de centro veio sem `center`"
+    assert centro["a"] == pytest.approx(137.0, abs=0.2)
+    assert centro["b"] == pytest.approx(11.0, abs=0.2)
+
     ghost_clicks = [raw for raw in controller.sent if raw.startswith("CLICK:")]
     assert ghost_clicks == [], f"calibrar acionado por `click`: {ghost_clicks}"
 
@@ -432,8 +538,12 @@ def test_w16_nenhuma_acao_depende_apenas_de_click():
 
 
 async def test_w17_conexao_automatica_pela_origem(controller: Controller):
-    """W17: conecta sem digitação em ≤ 5 s, usando o endereço da origem (F3.1, F3.2)."""
-    await controller.wait_state("conectado", timeout=5000)
+    """W17: conecta sem digitação em ≤ 5 s, usando o endereço da origem (F3.1, F3.2).
+
+    Mede o estado da CONEXÃO, não a tela: a primeira entrada cai em
+    `calibrando` (F12), e a tela alcançada é irrelevante para o que W17 afirma.
+    """
+    await controller.wait_link("conectado", timeout=5000)
 
     address = await controller.page.get_attribute("#status-banner", "data-address")
     assert (
@@ -445,16 +555,16 @@ async def test_w17_conexao_automatica_pela_origem(controller: Controller):
 async def test_w18_reconexao_automatica_sem_toque(browser, live_http_server, fake_gamepad):
     """W18: derrubada a conexão, o cliente reconecta sozinho em ≤ 5 s (F9.5)."""
     controller = await _open_controller(browser, live_http_server)
-    await controller.wait_state("conectado")
+    await controller.wait_link("conectado")
 
     live_http_server.stop()
-    await controller.wait_state("desconectado")
+    await controller.wait_link("desconectado")
 
     # Servidor volta a aceitar conexões na mesma porta; nenhum toque é dado.
     app = App(fake_gamepad)
     restarted = await run_server(app, live_http_server.port, use_tls=False)
     try:
-        await controller.wait_state("conectado", timeout=5000)
+        await controller.wait_link("conectado", timeout=5000)
         assert app.session is not None, "reconectou na interface mas o servidor não viu sessão"
     finally:
         restarted.close(close_connections=True)
@@ -470,7 +580,7 @@ async def test_w19_estado_da_conexao_sempre_visivel(controller: Controller):
     tela de queda: passados os ~800 ms de reconexão o cliente entra em
     `conectando` e aquela tela sai do ar, o que tornaria a asserção uma corrida.
     """
-    await controller.wait_state("conectado")
+    await controller.wait_link("conectado")
 
     # Amostra a faixa de status durante toda a transição de queda.
     await controller.page.evaluate("""() => {
@@ -485,7 +595,7 @@ async def test_w19_estado_da_conexao_sempre_visivel(controller: Controller):
              }, 40);
            }""")
     controller.server.stop()
-    await controller.wait_state("desconectado")
+    await controller.wait_link("desconectado")
     await controller.page.wait_for_timeout(1500)  # atravessa a volta para `conectando`
     await controller.page.evaluate("() => clearInterval(window.__sampler)")
 
@@ -661,7 +771,12 @@ async def test_w23_ponta_do_sensor_ancorada_e_com_estado(browser, live_http_serv
 
     marcadores: dict[str, str] = {}
 
-    # conectado: visível, acima de todos os controles acionáveis
+    # conectado: visível, acima de todos os controles acionáveis. A primeira
+    # entrada cai em `calibrando` (F12), então o perfil lembrado é o caminho
+    # especificado para chegar a `conectado`.
+    await controller.wait_state("calibrando")
+    marcadores["calibrando"] = (await tip_state())["marker"]
+    await _seed_saved_profile(controller)
     await controller.wait_state("conectado")
     conectado = await tip_state()
     marcadores["conectado"] = conectado["marker"]
@@ -711,6 +826,8 @@ async def test_w24_ilustracao_de_pegada_ensina_a_segurar(browser, live_http_serv
                }""")
 
     # pareamento: alcançável pelo comando da tela de queda
+    await controller.wait_state("calibrando")
+    await _seed_saved_profile(controller)
     await controller.wait_state("conectado")
     live_http_server.stop()
     await controller.wait_state("desconectado")
@@ -729,3 +846,296 @@ async def test_w24_ilustracao_de_pegada_ensina_a_segurar(browser, live_http_serv
     assert (
         area_conectando > 0
     ), f"ilustração de pegada ausente/oculta no estado conectando (área={area_conectando})"
+
+
+# ============ precisão do apontamento no cliente (W25–W29) =================
+# Faixa nova desta revisão. Toda ela usa o degrau `synthetic` ou as APIs de
+# sensor emuladas: o navegador headless não tem sensores, e sem essa costura o
+# assistente, o indicador de fonte e o de interferência ficariam sem cobertura.
+
+# Stubs mínimos das APIs de sensor, injetados ANTES da carga da página. São
+# andaime de teste (não vão para o produto): existem só para que cada degrau da
+# escada consiga iniciar em headless e o rótulo correspondente possa ser lido.
+SENSOR_STUBS = """
+    class _FakeSensor extends EventTarget {
+      constructor() { super(); this.x = 0; this.y = 0; this.z = 1; }
+      start() { this._t = setInterval(() => this.dispatchEvent(new Event('reading')), 16); }
+      stop() { clearInterval(this._t); }
+    }
+    window.Gyroscope = class extends _FakeSensor {};
+    window.Accelerometer = class extends _FakeSensor {};
+    window.Magnetometer = class extends _FakeSensor {};
+    window.AbsoluteOrientationSensor = class extends _FakeSensor {
+      constructor() { super(); this.quaternion = [0, 0, 0, 1]; }
+    };
+"""
+
+# Rótulos exibidos por degrau — contrato de web/js/config.js (SOURCE_LABELS).
+SOURCE_LABELS = {
+    "fusion_mag": "fusão + bússola",
+    "fusion_nomag": "fusão (sem bússola)",
+    "sensor_api": "sensores do sistema",
+    "deviceorientation": "orientação clássica",
+    "synthetic": "sintética (diagnóstico)",
+}
+
+
+async def _source_indicator(controller: Controller) -> dict:
+    return await controller.page.evaluate("""() => {
+             const banner = document.getElementById('source-banner');
+             const label = document.getElementById('source-label');
+             const r = banner.getBoundingClientRect();
+             return { area: r.width * r.height, label: label.textContent.trim() };
+           }""")
+
+
+@pytest.mark.parametrize("rung", list(SOURCE_LABELS))
+async def test_w25_fonte_de_orientacao_visivel_e_correta(browser, live_http_server, rung):
+    """W25 (F2.13, F13.4): o indicador mostra o degrau FORÇADO, e é visível.
+
+    Sem isto, a primeira pergunta de qualquer comparação entre aparelhos
+    ("qual fonte cada um está usando?") só teria resposta depurando.
+    """
+    context = await browser.new_context(has_touch=True, viewport=dict(PORTRAIT_VIEWPORT))
+    page = await context.new_page()
+    await page.add_init_script(SENSOR_STUBS)
+    controller = Controller(page=page, server=live_http_server)
+    await page.goto(f"{live_http_server.url}?src={rung}")
+
+    # `calibrando`: primeira entrada, sem perfil salvo.
+    await controller.wait_state("calibrando")
+    await page.wait_for_timeout(400)
+    em_calibrando = await _source_indicator(controller)
+    assert em_calibrando["area"] > 0, f"indicador de fonte invisível em `calibrando` ({rung})"
+    assert (
+        em_calibrando["label"] == SOURCE_LABELS[rung]
+    ), f"rótulo errado para ?src={rung}: {em_calibrando['label']!r}"
+
+    # `conectado`: segunda sessão, com o perfil lembrado.
+    await page.evaluate(
+        "([k, v]) => localStorage.setItem(k, JSON.stringify(v))",
+        [RANGES_STORAGE_KEY, SAVED_PROFILE],
+    )
+    await page.reload()
+    await controller.wait_state("conectado")
+    await page.wait_for_timeout(400)
+    em_conectado = await _source_indicator(controller)
+    assert em_conectado["area"] > 0, f"indicador de fonte invisível em `conectado` ({rung})"
+    assert em_conectado["label"] == SOURCE_LABELS[rung]
+    await context.close()
+
+
+# Fluxo roteirizado do assistente: neutro e os quatro extremos. Os alcances
+# esperados saem das diferenças para o neutro — quatro valores DISTINTOS, para
+# que um perfil comprimido a um valor único reprove.
+WIZARD_FLOW = [
+    ("neutro", 100.0, 10.0),
+    ("esquerda", 120.0, 10.0),
+    ("direita", 75.0, 10.0),
+    ("cima", 100.0, 28.0),
+    ("baixo", 100.0, -5.0),
+]
+EXPECTED_RANGES = {"left": 20.0, "right": 25.0, "up": 18.0, "down": 15.0}
+
+
+async def _visible_wizard_steps(controller: Controller) -> list[str]:
+    return await controller.page.evaluate("""() => [
+             ...document.querySelectorAll('#wizard-steps [data-step]')
+           ].filter(e => e.getBoundingClientRect().height > 0).map(e => e.dataset.step)""")
+
+
+async def test_w26_assistente_de_calibracao_completo(browser, live_http_server):
+    """W26 (F12): as cinco etapas, uma por vez, produzem quatro alcances."""
+    controller = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await controller.wait_state("calibrando")
+    controller.sent.clear()
+
+    ordem_observada = []
+    for _passo, alpha, beta in WIZARD_FLOW:
+        visiveis = await _visible_wizard_steps(controller)
+        assert len(visiveis) == 1, f"etapas visíveis simultâneas: {visiveis} (F2.15)"
+        ordem_observada.append(visiveis[0])
+
+        await controller.tap("#capture-button")
+        segurar_parado = await controller.page.evaluate(
+            "() => document.getElementById('wizard-hold').getBoundingClientRect().height > 0"
+        )
+        assert segurar_parado, f"instrução 'segure parado' ausente na etapa {visiveis[0]} (F5)"
+        await _push_orientation(controller, alpha, beta)
+        await controller.page.wait_for_timeout(200)
+
+    assert ordem_observada == list(WIZARD_STEPS), f"ordem das etapas: {ordem_observada}"
+
+    await controller.wait_state("conectado")
+    enviados = controller.messages_of_type("calibrate")
+    assert len(enviados) == 1, f"`calibrate` esperado ao final: {controller.sent}"
+    ranges = enviados[0].get("ranges")
+    assert ranges is not None, "`calibrate` do assistente saiu sem `ranges`"
+    for direcao, esperado in EXPECTED_RANGES.items():
+        assert ranges[direcao] == pytest.approx(
+            esperado, abs=0.3
+        ), f"alcance {direcao} = {ranges[direcao]} (esperado ~{esperado})"
+    assert (
+        len({round(v, 1) for v in ranges.values()}) == 4
+    ), f"os quatro alcances não são independentes: {ranges}"
+
+
+async def test_w26b_pular_e_refazer(browser, live_http_server):
+    """W26b (F12.5): pular aplica o padrão; refazer volta a `calibrando`."""
+    controller = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await controller.wait_state("calibrando")
+    controller.sent.clear()
+
+    await controller.tap("#skip-wizard-button")
+    await controller.wait_state("conectado")
+    enviados = controller.messages_of_type("calibrate")
+    assert len(enviados) == 1
+    assert enviados[0].get("ranges") is None, (
+        "pular enviou alcances do cliente; o padrão é do SERVIDOR (dono de "
+        f"DEFAULT_RANGE_DEG): {enviados[0]}"
+    )
+
+    # Refazer a partir de `conectado`, sem reconectar.
+    await controller.tap("#range-button")
+    await controller.wait_state("calibrando")
+    assert len(await _visible_wizard_steps(controller)) == 1
+
+
+async def test_w26c_rejeicao_nao_passa_em_silencio(browser, live_http_server):
+    """W26c (F12/KPI-14): `accepted: false` exibe o motivo, sem seguir calibrado.
+
+    O servidor é a AUTORIDADE sobre os limites: um perfil recusado por ele tem
+    de aparecer na tela com o motivo, em vez de o cliente seguir como se
+    tivesse calibrado.
+    """
+    controller = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await controller.wait_state("calibrando")
+
+    # Perfil degenerado: o extremo fica longe demais do neutro (acima de
+    # RANGE_MAX_DEG), então o servidor recusa e responde com o motivo.
+    fluxo_ruim = [
+        ("neutro", 100.0, 10.0),
+        ("esquerda", 120.0, 10.0),
+        ("direita", 75.0, 10.0),
+        ("cima", 100.0, 28.0),
+        ("baixo", 100.0, -5.0),
+    ]
+    for _passo, alpha, beta in fluxo_ruim:
+        await controller.tap("#capture-button")
+        await _push_orientation(controller, alpha, beta)
+        await controller.page.wait_for_timeout(200)
+    await controller.wait_state("conectado")
+
+    # Agora força uma rejeição real do servidor reenviando um perfil inválido.
+    await controller.page.evaluate("""() => {
+             const ws = window.__controllerSocket;
+             ws.send(JSON.stringify({ type: 'calibrate', ranges: { left: 1, right: 1,
+                                                                   up: 1, down: 1 } }));
+           }""")
+    await controller.page.wait_for_timeout(400)
+
+    erro = await controller.page.evaluate("""() => {
+             const el = document.getElementById('error-banner');
+             const r = el.getBoundingClientRect();
+             return { area: r.width * r.height, text: el.textContent };
+           }""")
+    assert erro["area"] > 0, "rejeição de calibração não ficou visível (KPI-14)"
+    assert "recusada" in erro["text"].lower(), f"motivo não exibido: {erro['text']!r}"
+
+
+async def test_w27_botoes_suspensos_durante_a_calibracao(browser, live_http_server):
+    """W27 (F2.16): em `calibrando`, nenhum `button` sai; `motion` continua."""
+    controller = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await controller.wait_state("calibrando")
+    controller.sent.clear()
+
+    await _push_orientation(controller, 10.0, 5.0, n=20, gap_ms=20)
+    # Aciona um botão de gamepad por toque real, ainda em `calibrando`.
+    await controller.page.evaluate("""() => {
+             const el = document.querySelector('[data-button="a"]');
+             const t = new Touch({ identifier: 1, target: el, clientX: 10, clientY: 10 });
+             el.dispatchEvent(new TouchEvent('touchstart',
+               { changedTouches: [t], bubbles: true, cancelable: true }));
+             el.dispatchEvent(new TouchEvent('touchend',
+               { changedTouches: [t], bubbles: true, cancelable: true }));
+           }""")
+    await controller.page.wait_for_timeout(200)
+
+    assert (
+        controller.messages_of_type("button") == []
+    ), "`button` enviado durante a calibração — dispararia no jogo (F2.16)"
+    assert (
+        len(controller.messages_of_type("motion")) > 0
+    ), "`motion` parou durante a calibração; sem amostras não há o que capturar"
+
+
+# Campo magnético coerente e campo corrompido (mesa metálica/monitor).
+MAG_BOM = {
+    "gyro": {"x": 0, "y": 0, "z": 0},
+    "acc": {"x": 0, "y": 0, "z": 1},
+    "mag": {"x": 0, "y": 25, "z": -43},
+    "dtMs": 16.7,
+}
+MAG_RUIM = {
+    "gyro": {"x": 0, "y": 0, "z": 0},
+    "acc": {"x": 0, "y": 0, "z": 1},
+    "mag": {"x": 70, "y": 60, "z": -20},
+    "dtMs": 16.7,
+}
+
+
+async def test_w28_indicador_de_interferencia_magnetica(synthetic_controller: Controller):
+    """W28 (F2.14): o indicador aparece na interferência, SEM trocar de tela."""
+    controller = synthetic_controller
+
+    async def indicador_visivel() -> bool:
+        return await controller.page.evaluate(
+            "() => document.getElementById('mag-indicator').getBoundingClientRect().height > 0"
+        )
+
+    await _push_sensors(controller, MAG_BOM, n=40)
+    tela_antes = await controller.visible_screens()
+    assert not await indicador_visivel(), "indicador de rejeição ligado sem interferência"
+
+    await _push_sensors(controller, MAG_RUIM, n=80)
+    assert await indicador_visivel(), "interferência magnética não ficou visível (F2.14)"
+    assert (
+        await controller.visible_screens() == tela_antes
+    ), "a interferência trocou de tela — tiraria o controle da mão do jogador"
+
+    await _push_sensors(controller, MAG_BOM, n=120)
+    assert not await indicador_visivel(), "o indicador não voltou a ocultar ao cessar"
+
+
+async def test_w29_persistencia_do_perfil(browser, live_http_server):
+    """W29 (F12.6, F3.5): recarregar reaplica os alcances, e o centro NÃO."""
+    controller = await _open_controller(browser, live_http_server, query="?src=synthetic")
+    await controller.wait_state("calibrando")
+
+    for _passo, alpha, beta in WIZARD_FLOW:
+        await controller.tap("#capture-button")
+        await _push_orientation(controller, alpha, beta)
+        await controller.page.wait_for_timeout(200)
+    await controller.wait_state("conectado")
+
+    chaves = await controller.page.evaluate("() => Object.keys(localStorage).sort()")
+    assert chaves == [
+        "wii-controller.last-address",
+        "wii-controller.ranges-profile",
+    ], f"lista de chaves de localStorage não é a fechada de duas (F12.8): {chaves}"
+
+    controller.sent.clear()
+    await controller.page.reload()
+    await controller.wait_state("conectado")  # sem repetir as quatro etapas
+    await controller.page.wait_for_timeout(300)
+
+    enviados = controller.messages_of_type("calibrate")
+    assert len(enviados) == 1, f"alcances não reenviados na recarga: {controller.sent}"
+    ranges = enviados[0].get("ranges")
+    assert ranges is not None
+    for direcao, esperado in EXPECTED_RANGES.items():
+        assert ranges[direcao] == pytest.approx(esperado, abs=0.3)
+    assert "center" not in enviados[0], (
+        "o centro foi reaplicado da sessão anterior; ele depende da postura de "
+        "agora, e um centro velho é pior que nenhum (F12)"
+    )

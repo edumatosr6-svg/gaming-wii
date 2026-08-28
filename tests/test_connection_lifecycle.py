@@ -28,7 +28,7 @@ async def _activate_inputs(ws) -> None:
     # Ponta girada ao maximo para a direita (alpha negativo): eixo horizontal
     # saturado na pegada vertical (F4.6).
     await ws.send(
-        json.dumps({"type": "motion", "a": -config.MAX_ANGLE_DEG, "b": 0, "g": 0, "t": 1})
+        json.dumps({"type": "motion", "a": -config.DEFAULT_RANGE_DEG, "b": 0, "g": 0, "t": 1})
     )
     await ws.send(json.dumps({"type": "button", "id": "a", "down": True}))
     await asyncio.sleep(0.15)

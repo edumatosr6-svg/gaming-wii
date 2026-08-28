@@ -77,16 +77,126 @@ def test_g14_sem_imports_cruzados():
             assert match.startswith("./"), f"{path} importa fora de web/: {match}"
 
 
-def test_g6_sem_localstorage_para_estado_de_jogo():
-    """localStorage só no cliente (último IP) — nunca em game/ (diretiva)."""
+def test_g6_localstorage_com_lista_fechada_de_duas_chaves():
+    """localStorage nunca em game/, e no cliente só em `storage.js` (F3.5/F12.8).
+
+    A regra da spec é literal: EXATAMENTE duas chaves — o último endereço e o
+    perfil de alcances. Estado de jogo continua proibido. Centralizar o acesso
+    num módulo é o que torna a regra verificável: com o acesso espalhado,
+    "quantas chaves existem?" vira uma busca no projeto inteiro e uma terceira
+    chave entra sem ninguém notar.
+    """
     usage = re.compile(r"localStorage\s*[.\[]")  # uso real, não comentário
     for path in _game_js_files():
         assert not usage.search(path.read_text(encoding="utf-8")), path
-    # em web/, apenas connection.js (pareamento F3)
+
+    dono = ROOT / "web" / "js" / "storage.js"
     for path in sorted((ROOT / "web").rglob("*.js")):
-        if path.name == "connection.js":
+        if path == dono:
             continue
-        assert not usage.search(path.read_text(encoding="utf-8")), path
+        assert not usage.search(path.read_text(encoding="utf-8")), (
+            f"{path.name} toca localStorage fora do módulo dono (storage.js) — "
+            "a lista fechada de duas chaves deixa de ser verificável"
+        )
+
+    texto = dono.read_text(encoding="utf-8")
+    chaves = set(re.findall(r"['\"](wii-controller\.[\w.-]+)['\"]", texto))
+    assert chaves == {
+        "wii-controller.last-address",
+        "wii-controller.ranges-profile",
+    }, f"lista de chaves de localStorage não é a fechada de duas (F12.8): {sorted(chaves)}"
+
+
+# ------------- verificações estáticas da revisão de precisão (tooling.md)
+
+
+def test_sem_normalizacao_radial_no_mapeamento():
+    """tooling.md 7 (F4): sem hipotenusa no mapeamento de apontamento.
+
+    A normalização é por eixo e por direção; qualquer combinação radial dos
+    dois eixos antes da normalização reintroduz o raio único que esta revisão
+    remove — e desfaz, em silêncio, os quatro alcances medidos pela F12.
+    """
+    mapping = (ROOT / "server" / "mapping.py").read_text(encoding="utf-8")
+    ofensas = [
+        linha.strip()
+        for linha in mapping.splitlines()
+        if re.search(r"\bmath\.hypot\b|\bhypot\(", linha) and not linha.strip().startswith("#")
+    ]
+    assert ofensas == [], f"normalização radial de volta em mapping.py: {ofensas}"
+
+
+def test_pc22_selecao_de_fonte_nao_decide_por_user_agent():
+    """PC22/tooling.md 8 (F13.1): nada de decisão por nome de navegador.
+
+    A detecção é em tempo de execução — a fonte só conta como disponível se
+    amostras realmente chegarem. Decidir por `navigator.userAgent` envelhece
+    mal e é cego para o modo de falha real do evento clássico, que é existir,
+    ter permissão e mesmo assim não emitir nada sob economia de bateria.
+    """
+    proibido = re.compile(r"navigator\s*\.\s*(userAgent|userAgentData|platform|vendor)")
+    for path in sorted((ROOT / "web" / "js").glob("*.js")):
+        texto = path.read_text(encoding="utf-8")
+        ofensas = [
+            linha.strip()
+            for linha in texto.splitlines()
+            if proibido.search(linha) and not linha.strip().startswith("//")
+        ]
+        assert ofensas == [], f"decisão por user agent em {path.name}: {ofensas}"
+
+
+def test_constantes_de_precisao_tem_dono_unico():
+    """tooling.md 9: nenhuma constante espelhada além de RANGE_MIN/RANGE_MAX.
+
+    Zona morta, sensibilidade, alcances e suavização são do servidor; janela de
+    captura, estabilidade, retries e orçamento do assistente são do cliente.
+    Qualquer outra constante duplicada reprova, porque é divergência silenciosa
+    esperando acontecer.
+    """
+    servidor = (ROOT / "server" / "config.py").read_text(encoding="utf-8")
+    cliente = (ROOT / "web" / "js" / "config.js").read_text(encoding="utf-8")
+
+    def atribuidas(texto: str, padrao: str) -> set[str]:
+        return set(re.findall(padrao, texto, re.MULTILINE))
+
+    do_servidor = atribuidas(servidor, r"^([A-Z][A-Z0-9_]+)\s*[:=]")
+    do_cliente = atribuidas(cliente, r"^export const ([A-Z][A-Z0-9_]+)\s*=")
+
+    # ESCOPO DA REGRA: constantes de PRECISÃO/TUNING, que é onde a divergência
+    # é silenciosa — dois lados com zonas mortas diferentes não dão erro
+    # nenhum, só produzem uma mira que ninguém entende. Enums de PROTOCOLO
+    # (`SOURCE_LADDER`, `DIAGNOSTIC_SOURCE`) e a taxa de envio são contrato
+    # compartilhado por definição: os dois lados precisam concordar, e a
+    # divergência ali falha alto (mensagem rejeitada), não em silêncio. O
+    # projeto já tratava `BUTTON_IDS` assim, presente nos dois lados desde
+    # antes desta revisão. Esses são verificados por ACORDO, logo abaixo.
+    contrato_compartilhado = {"SOURCE_LADDER", "DIAGNOSTIC_SOURCE", "MOTION_SEND_HZ"}
+    duplicadas = (do_servidor & do_cliente) - contrato_compartilhado
+    assert duplicadas == {"RANGE_MIN_DEG", "RANGE_MAX_DEG"}, (
+        "duplicação de constantes de precisão entre servidor e cliente fora da "
+        f"única permitida: {sorted(duplicadas)}"
+    )
+
+    # O cliente é dono das constantes de captura/assistente; o servidor não
+    # pode ter cópia delas.
+    for constante in (
+        "CALIB_WINDOW_MS",
+        "CALIB_MIN_SAMPLES_FLOOR",
+        "CALIB_STABILITY_PP_DEG",
+        "WIZARD_BUDGET_MS",
+    ):
+        assert constante in do_cliente, f"{constante} deveria morar no cliente"
+        assert constante not in do_servidor, f"{constante} duplicada no servidor"
+
+    # E o servidor é dono das de mapeamento.
+    for constante in (
+        "DEAD_ZONE_YAW_DEG",
+        "DEAD_ZONE_PITCH_DEG",
+        "DEFAULT_RANGE_DEG",
+        "SMOOTH_ALPHA_STILL",
+    ):
+        assert constante in do_servidor, f"{constante} deveria morar no servidor"
+        assert constante not in do_cliente, f"{constante} duplicada no cliente"
 
 
 # ------------------------------------------------------ manuais / hardware
@@ -210,3 +320,46 @@ def test_g20_static_mira_nao_integra_velocidade_no_consumidor():
         "a posição da mira se realimenta da posição anterior (integração de "
         f"velocidade) — proibido por F10.7/KPI-16: {ofensas}"
     )
+
+
+def test_contrato_compartilhado_concorda_entre_os_dois_lados():
+    """Os enums que os dois lados precisam conhecer têm de ser IGUAIS.
+
+    `SOURCE_LADDER`/`DIAGNOSTIC_SOURCE` e a taxa de envio são contrato de
+    protocolo, não parâmetro de tuning: existem nos dois lados por necessidade
+    (o cliente percorre a escada, o servidor valida o enum do `status`). O que
+    a spec exige deles não é ausência de cópia — é ACORDO. Um degrau a mais só
+    no cliente faria o servidor descartar o `status` em silêncio, e o degrau em
+    uso sumiria de `GET /metrics` (F13.6).
+    """
+    import json
+    import subprocess
+
+    from server import config
+
+    node = shutil.which("node")
+    assert node is not None
+    resultado = subprocess.run(
+        [
+            node,
+            "--input-type=module",
+            "-e",
+            "import('./web/js/config.js').then((m) => console.log(JSON.stringify({"
+            "ladder: m.SOURCE_LADDER, diag: m.DIAGNOSTIC_SOURCE, hz: m.MOTION_SEND_HZ,"
+            "rmin: m.RANGE_MIN_DEG, rmax: m.RANGE_MAX_DEG})))",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    cliente = json.loads(resultado.stdout.strip())
+
+    assert tuple(cliente["ladder"]) == config.SOURCE_LADDER
+    assert cliente["diag"] == config.DIAGNOSTIC_SOURCE
+    assert cliente["hz"] == config.MOTION_SEND_HZ
+    # A duplicação permitida também precisa concordar: o servidor é a
+    # autoridade, e um cliente mais permissivo só produziria um "não" tardio.
+    assert cliente["rmin"] == config.RANGE_MIN_DEG
+    assert cliente["rmax"] == config.RANGE_MAX_DEG

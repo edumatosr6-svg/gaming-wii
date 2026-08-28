@@ -38,6 +38,18 @@
     <div id="top-banners" class="banner-stack top">
       <div id="error-banner" class="banner error" hidden></div>
       <div id="status-banner" class="banner status" data-state="conectando">conectando…</div>
+      <!--
+        Fonte de orientação em uso (F2.13) e rejeição magnética (F2.14).
+        Quando a precisão variar entre dois aparelhos, a primeira pergunta é
+        "qual fonte cada um está usando?", e ela precisa ter resposta na tela,
+        sem depurar. Vive nas faixas persistentes (fora das telas) porque
+        precisa existir tanto em `conectado` quanto em `calibrando`; o
+        JavaScript o oculta nos demais estados.
+      -->
+      <div id="source-banner" class="banner source" hidden>
+        fonte: <span id="source-label">—</span>
+        <span id="mag-indicator" hidden>· bússola rejeitada (interferência)</span>
+      </div>
     </div>
 
     <div id="bottom-banners" class="banner-stack bottom">
@@ -135,8 +147,15 @@
 
           <div class="system-row">
             <button class="pad-button small" data-button="back" type="button">BACK</button>
+            <!-- Centro (F5): o toque INICIA a captura da janela; a mensagem
+                 `calibrate` sai ao FIM dela, com a média (F2.6). -->
             <button id="calibrate-button" class="pad-button small calibrate" type="button">
-              CALIBRAR
+              CENTRO
+            </button>
+            <!-- Refazer o assistente de alcance a partir de `conectado`, sem
+                 reconectar e sem reiniciar o servidor (F12). -->
+            <button id="range-button" class="pad-button small calibrate" type="button">
+              ALCANCE
             </button>
             <button class="pad-button small" data-button="start" type="button">START</button>
           </div>
@@ -149,6 +168,52 @@
             <button class="pad-button shoulder" data-button="rb" type="button">R</button>
           </div>
         </div>
+      </section>
+
+      <!--
+        Assistente de calibração guiada (F12/P6). Cinco etapas na ordem
+        neutro → esquerda → direita → cima → baixo, EXATAMENTE UMA visível por
+        vez (F2.15). Durante a captura a tela diz para segurar parado e mostra
+        o progresso da janela: a calibração leva uma janela de amostras, e a
+        interface não pode fingir que é instantânea.
+
+        Durante este estado o cliente NÃO envia `button` (evita disparo
+        acidental no jogo enquanto o usuário calibra) e CONTINUA enviando
+        `motion` — sem as amostras não haveria o que capturar (F2.16).
+      -->
+      <section id="calibrate-screen" class="screen" data-screen="calibrando" hidden>
+        <h1>Calibrar apontamento</h1>
+        <div id="wizard-steps">
+          <div class="wizard-step" data-step="neutro" hidden>
+            <h2>Posição neutra</h2>
+            <p>Segure o aparelho em pé, com a ponta apontada para o centro da tela do PC.</p>
+          </div>
+          <div class="wizard-step" data-step="esquerda" hidden>
+            <h2>Aponte para a esquerda</h2>
+            <p>Gire o pulso e aponte a ponta para a borda ESQUERDA da tela, sem forçar.</p>
+          </div>
+          <div class="wizard-step" data-step="direita" hidden>
+            <h2>Aponte para a direita</h2>
+            <p>Agora para a borda DIREITA da tela, até onde for confortável.</p>
+          </div>
+          <div class="wizard-step" data-step="cima" hidden>
+            <h2>Aponte para cima</h2>
+            <p>Levante a ponta até a borda de CIMA da tela.</p>
+          </div>
+          <div class="wizard-step" data-step="baixo" hidden>
+            <h2>Aponte para baixo</h2>
+            <p>Abaixe a ponta até a borda de BAIXO da tela.</p>
+          </div>
+        </div>
+
+        <p id="wizard-hold" class="hold-still" hidden>Segure parado…</p>
+        <div id="wizard-progress" class="progress" hidden><span class="bar"></span></div>
+        <p id="wizard-message" class="muted"></p>
+
+        <button id="capture-button" type="button">CAPTURAR</button>
+        <button id="skip-wizard-button" type="button" class="secondary">
+          Pular e usar o padrão
+        </button>
       </section>
 
       <section id="disconnected-screen" class="screen" data-screen="desconectado" hidden>

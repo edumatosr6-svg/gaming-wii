@@ -44,6 +44,16 @@ class MetricsWindow:
         self._net_ms: deque[float] = deque(maxlen=window_size)
         self._proc_ms: deque[float] = deque(maxlen=window_size)
         self._motion_times: deque[float] = deque(maxlen=window_size)
+        # Degrau da escada de fontes em uso e rejeição magnética (F13.6): sem
+        # o degrau registrado, comparar precisão entre dois aparelhos vira
+        # depuração. Chegam por `status`, de baixa frequência.
+        self._source: str | None = None
+        self._mag_rejected: bool = False
+
+    def record_source(self, source: str, mag_rejected: bool) -> None:
+        """Registra o degrau de fonte em uso reportado pelo cliente (F13.6)."""
+        self._source = source
+        self._mag_rejected = mag_rejected
 
     def record_rtt(self, rtt_ms: float) -> None:
         """Registra um RTT do ping/pong; guarda RTT/2 como componente de rede."""
@@ -68,7 +78,7 @@ class MetricsWindow:
             return 0.0
         return (len(self._motion_times) - 1) / span
 
-    def snapshot(self) -> dict[str, float]:
+    def snapshot(self) -> dict[str, object]:
         """Métricas correntes no formato do endpoint `GET /metrics` (F11.3)."""
         net = percentile(list(self._net_ms), 0.5)
         proc_samples = list(self._proc_ms)
@@ -86,4 +96,6 @@ class MetricsWindow:
             "jitter_ms": jitter,
             "net_ms": net,
             "proc_ms": percentile(proc_samples, 0.5),
+            "source": self._source,
+            "mag_rejected": self._mag_rejected,
         }

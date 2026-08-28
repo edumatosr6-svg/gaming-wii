@@ -1,6 +1,11 @@
 // WebSocket, reconexão e estado da conexão (F3, F9).
+//
+// A persistência mora em `storage.js`, que é o único módulo do cliente a tocar
+// `localStorage` e mantém a lista fechada de duas chaves (F3.5/F12.8).
 
-const STORAGE_KEY = 'wii-controller.last-address'; // único uso de localStorage
+import { loadLastAddress, saveLastAddress } from './storage.js';
+
+export { loadLastAddress, saveLastAddress };
 
 // Monta a URL do WebSocket a partir de IP e porta. O padrão é seguro (`wss`),
 // que é o modo em que o servidor roda (HTTPS é exigido pelos sensores, F1).
@@ -23,32 +28,8 @@ export function addressFromLocation(location, defaultPort) {
   return { ip: hostname, port, secure };
 }
 
-// Lê/salva o último endereço usado com sucesso (somente IP/porta — F3.4).
-export function loadLastAddress() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw);
-    if (typeof parsed.ip === 'string' && typeof parsed.port === 'string') {
-      return { ip: parsed.ip, port: parsed.port };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveLastAddress(ip, port) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ip, port: String(port) }));
-  } catch {
-    // localStorage indisponível não impede o uso
-  }
-}
-
-// Cria a conexão de controle. callbacks: onOpen, onClose, onError, onVibrate.
+// Cria a conexão de controle.
+// callbacks: onOpen, onClose, onError, onVibrate, onCalibrationApplied.
 export function createConnection(callbacks) {
   let socket = null;
   let sessionId = null;
@@ -116,6 +97,13 @@ export function createConnection(callbacks) {
         send({ type: 'pong', t: data.t });
       } else if (data.type === 'vibrate') {
         callbacks.onVibrate(data.intensity, data.duration_ms);
+      } else if (data.type === 'calibration_applied') {
+        // Um perfil rejeitado NUNCA passa em silêncio (F12/KPI-14): o
+        // assistente precisa do motivo para exibir e oferecer refazer, em vez
+        // de seguir como se tivesse calibrado.
+        if (typeof callbacks.onCalibrationApplied === 'function') {
+          callbacks.onCalibrationApplied(data.accepted, data.reason, data.effective);
+        }
       }
     });
   }

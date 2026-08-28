@@ -76,6 +76,93 @@
   usuário está sentado, deitado ou em pé. Deve poder ser reexecutado a qualquer
   momento sem reiniciar a sessão.
 
+  **REVISÃO HUMANA (precisão — substitui a calibração de amostra única):** capturar
+  o centro de uma leitura instantânea é frágil: se aquela amostra pegar um pico de
+  ruído, o viés contamina a sessão inteira. O centro passa a ser a **média de uma
+  janela curta de amostras** com o aparelho parado (ordem de meio a um segundo), e
+  a interface precisa dizer "segure parado" durante a captura em vez de fingir que
+  é instantânea. Amostra isolada fora do esperado durante a captura invalida a
+  janela e pede repetição — calibrar errado é pior que não calibrar.
+
+- **Calibração guiada de alcance (assistente inicial)**: além do centro, o jogo/
+  controle conduz uma calibração de **alcance de movimento** na primeira entrada:
+  segure na posição neutra, depois aponte confortavelmente para a **esquerda**, para
+  a **direita**, para **cima** e para **baixo**. Cada extremo é capturado do mesmo
+  jeito que o centro (janela de amostras com o aparelho sustentado na posição, não
+  o pico instantâneo — um tremor não pode definir o alcance da sessão).
+
+  **Por que isso importa.** Hoje o ângulo máximo é uma constante única e simétrica
+  chutada para "o usuário médio". Na prática o alcance confortável do pulso é
+  **diferente entre pessoas e diferente entre direções** — quase ninguém gira tanto
+  para a esquerda quanto para a direita, e o alcance vertical costuma ser menor que
+  o horizontal. Medir o alcance real de cada jogador faz a curva de sensibilidade se
+  ajustar à pessoa: alcançar os cantos deixa de exigir contorção e o meio da tela
+  deixa de ser excessivamente sensível.
+
+  Consequência a assumir: o mapeamento ângulo→mira precisa deixar de ser **radial
+  simétrico** (um raio único) e passar a ter **limite por direção** (esquerda,
+  direita, cima, baixo, independentes). Um alcance medido por direção não serve
+  para nada se o mapeamento o comprimir de volta num raio único.
+
+  Requisitos do assistente: rápido (é a primeira coisa entre o usuário e o jogo —
+  alvo de menos de meio minuto), pulável com valores padrão para quem só quer
+  jogar, refazível a qualquer momento, e com resultado lembrado no dispositivo para
+  que a segunda sessão não repita o ritual. Valor medido absurdo (alcance perto de
+  zero, ou o usuário não se moveu) deve ser rejeitado com nova tentativa, nunca
+  aceito silenciosamente — um alcance degenerado trava a mira.
+
+- **Precisão do apontamento (revisão humana — o eixo horizontal é o problema)**:
+  o teste real mostrou que apontar funciona, mas ainda "dá trabalho". Diagnóstico:
+  os dois eixos **não têm a mesma qualidade de sinal**, e tratá-los igual é o erro.
+  A elevação da ponta vem essencialmente de acelerômetro + giroscópio, sinal
+  estável; a direção horizontal depende do **magnetômetro**, sensível a
+  interferência (mesa metálica, PC, monitor, fonte) e a deriva ao longo da sessão.
+  Daí o pedido do usuário: **mexer em todos os eixos com a mesma precisão**.
+
+  Quatro frentes, todas exigidas:
+
+  1. **Zona morta e sensibilidade por eixo, não uma zona morta radial única.** Com
+     um raio único, ou o eixo horizontal treme, ou o vertical fica grudento perto do
+     centro — não existe valor que sirva para os dois. Cada eixo passa a ter seus
+     próprios parâmetros, com valores justificados pela diferença de ruído acima.
+
+  2. **Suavização adaptativa no lugar do filtro de fator fixo.** Um fator único
+     obriga a escolher entre mira estável parada e resposta rápida em movimento; hoje
+     essas duas metas brigam. A suavização deve ser **função da velocidade do
+     movimento**: filtra forte quando o aparelho está quase imóvel (mata o tremor) e
+     praticamente desliga durante um gesto rápido (preserva a resposta). É o que
+     permite atender tremor e resposta ao mesmo tempo em vez de negociar entre eles.
+     O corte de um Fruit Ninja é o caso de teste: precisa acompanhar o gesto sem
+     borrar, e a mira precisa ficar quieta quando a mão para.
+
+  3. **Fonte de sensor de maior qualidade quando o navegador oferecer.** O evento de
+     orientação clássico é limitado e sofre economia de bateria do navegador,
+     entregando menos amostras (e mais irregulares) do que o sensor é capaz. Quando a
+     API de sensores moderna estiver disponível, usá-la e **pedir a frequência
+     explicitamente**, em vez de aceitar o que o navegador der.
+
+  4. **Fusão de sensores própria, para atacar a deriva horizontal na raiz.** Ler
+     giroscópio, acelerômetro e magnetômetro **crus** e fazer a fusão no cliente,
+     com **rejeição de leitura magnética** quando o campo medido fugir do esperado
+     (assinatura de interferência): nesse intervalo a direção horizontal segue só
+     pelo giroscópio, em vez de ser puxada por uma bússola mentindo. É a única
+     frente que ataca a causa da deriva; as outras três tratam sintoma.
+
+  **Como isso precisa ser desenhado.** As quatro fontes de orientação possíveis
+  (fusão própria sobre sensores crus → API de sensores moderna → evento de
+  orientação clássico) formam uma **escada de degradação explícita**: o cliente usa a
+  melhor disponível, informa na tela qual está em uso, e continua jogável na pior
+  delas. Nenhuma delas pode ser condição para o produto funcionar — um aparelho sem
+  magnetômetro ainda joga. Cada frente precisa ser **verificável e desligável
+  isoladamente**: sem isso, uma regressão de precisão vira caça ao fantasma entre
+  quatro mudanças simultâneas, e é justamente a precisão que estamos tentando medir.
+
+  **O que continua proibido:** nada disso justifica app nativo, npm, framework ou
+  etapa de build — a fusão e os filtros são JavaScript puro servido como arquivo
+  estático, como todo o resto do cliente. E nada disso pode reintroduzir mira por
+  velocidade: por mais filtro e fusão que existam no caminho, a mesma orientação
+  física continua tendo que produzir a mesma posição de mira.
+
 - **Botões touch com visual de Wii Remote**: a tela do celular, na vertical, é
   desenhada como o corpo de um controle — a interface **parece um controle**, não
   uma página com botões. Layout em coluna, inspirado no Wii Remote e pensado para o
@@ -236,6 +323,21 @@ são secundárias.
   incomoda menos que uma oscilando entre 10 e 60 ms.
 - **Deriva do giroscópio**: quanto o centro "escorrega" ao longo de uma sessão de 15
   minutos sem recalibrar. Quanto menor, menos o usuário precisa apertar "calibrar".
+  Com a fusão própria e a rejeição de leitura magnética, este número tem que
+  **melhorar em relação à versão anterior** — é o critério de aceite da frente 4, e
+  a comparação entre as duas fontes de orientação precisa ser medida, não intuída.
+- **Simetria de precisão entre os eixos**: o eixo horizontal e o vertical devem ter
+  qualidade de mira comparável — tremor parado e erro de acerto na mesma ordem de
+  grandeza. Hoje o horizontal é visivelmente pior, e essa diferença é o alvo
+  principal desta revisão; um número bom "na média dos dois eixos" que esconda um
+  eixo ruim não conta como sucesso.
+- **Ganho da calibração guiada**: alcançar as bordas e os cantos da tela deve ser
+  confortável para jogadores com alcances de pulso diferentes, sem que ninguém
+  precise mexer em constante de configuração. Verificado com pelo menos duas
+  pessoas de alcance diferente, e comparado contra os valores padrão.
+- **Custo de entrada da calibração**: o assistente inicial completo (centro + quatro
+  direções) tem que caber em menos de meio minuto. Calibração boa que ninguém tem
+  paciência de completar não melhora precisão nenhuma.
 - **Tempo de setup**: do servidor iniciado até estar jogando, em uma reconexão. Alvo:
   abaixo de 15 segundos.
 - **Estabilidade de sessão**: minutos de uso contínuo sem queda de conexão ou input
@@ -310,6 +412,23 @@ faz o jogo servir como teste de aceitação do projeto.
 - **Amostragem do giroscópio**: o evento de orientação do navegador dispara mais rápido
   do que é útil transmitir. Definir uma taxa de envio (throttle) e, se necessário,
   suavização, equilibrando responsividade contra tráfego de rede.
+
+- **Disponibilidade das fontes de sensor é irregular**: a API de sensores moderna e o
+  acesso aos sensores crus (giroscópio/acelerômetro/magnetômetro separados) dependem
+  de contexto seguro, de permissão e de o aparelho ter o sensor — um celular sem
+  magnetômetro é caso real, não hipótese. A escada de degradação precisa ser
+  **detectada em tempo de execução**, não presumida pelo nome do navegador, e a fonte
+  em uso precisa estar visível na tela: quando a precisão variar entre dois aparelhos,
+  a primeira pergunta será "qual fonte cada um está usando?" e ela tem que ter
+  resposta sem depurar.
+
+- **Onde mora o processamento de orientação**: a fusão de sensores acontece
+  necessariamente no cliente (é lá que estão os sensores crus, e enviar três sensores
+  crus a 60 Hz multiplicaria o tráfego da mensagem mais frequente do protocolo). Já a
+  calibração, os filtros e a conversão para posição apontada moram no servidor hoje —
+  a spec precisa decidir explicitamente o que muda de lado, e assumir a consequência:
+  o que for para o cliente sai do alcance da suíte de testes do servidor e precisa de
+  cobertura equivalente do lado JS.
 
 - **Rede local apenas**: o servidor escuta na rede local, sem autenticação além do
   fato de estar na mesma rede. Isso é uma decisão consciente de escopo doméstico —

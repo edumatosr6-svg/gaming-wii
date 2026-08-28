@@ -11,13 +11,26 @@
   roda a suíte JS e falha se ela falhar. Node.js é ferramenta de desenvolvimento
   apenas; nada de npm/pacotes — só o runner embutido. Assim um único `pytest -q`
   cobre servidor e jogo.
+- **A faixa JS pura cresce nesta revisão e passa a ser obrigatória para a precisão.**
+  Fusão de sensores, rejeição magnética, escada de fontes, captura de janela de
+  calibração e lógica do assistente rodam no cliente e **saíram do alcance da suíte
+  Python** (ver "Divisão do processamento" em software-specs.md). Os casos PC1–PC27 de
+  tests/pointing-client.md rodam no mesmo `node --test`, alimentados por fluxos
+  sintéticos de sensores. Uma entrega que mova lógica para o cliente sem essa cobertura
+  reprova: seria trocar testes existentes por nenhum teste.
 - **Testes de integração em navegador headless: obrigatórios na execução padrão.**
   Carregam a página real do controle servida pelo servidor real, emulam toque e
   inspecionam as mensagens que saem pelo socket e a geometria do layout (casos
-  W11–W24). Ferramenta: Playwright para Python, dirigindo Chromium — mesma família do
+  W11–W29). Ferramenta: Playwright para Python, dirigindo Chromium — mesma família do
   navegador do aparelho de referência. **Viewport retrato obrigatório** nos casos que
   medem geometria (dimensões do A57 em pé, ex. 412×915): a interface é um corpo de
-  Wii Remote vertical (F2), e medir em paisagem valida um layout que não existe mais. Justificativa: a suíte anterior cobria lógica pura e servidor, e
+  Wii Remote vertical (F2), e medir em paisagem valida um layout que não existe mais.
+  **Fonte de orientação nos casos headless: o degrau `synthetic` (`?src=synthetic`,
+  F13)** — o navegador headless não tem sensores, e sem essa costura o assistente de
+  calibração, o indicador de fonte e o de interferência ficariam sem cobertura
+  automatizada. A costura é do próprio produto (é o mesmo mecanismo de forçamento de
+  fonte usado para diagnóstico, F15), não um caminho que só existe em teste.
+  Justificativa: a suíte anterior cobria lógica pura e servidor, e
   passava com 52 testes enquanto o produto era inutilizável; **toda a faixa de
   defeitos vivia na integração com o DOM**, que ficava sem teste algum.
   Estes testes **não podem ser marcados como opcionais nem pulados em silêncio**: se o
@@ -59,6 +72,20 @@ Automatizadas como testes (rodam no `pytest -q`):
 6. Nenhum elemento não-interativo posicionado sobre a área dos controles fica sem
    neutralizar a captura de toque (W14, F2.7); a verificação por geometria real é o
    W14 em navegador headless, esta é a checagem estática que a acompanha.
+7. **Sem `hypot` no mapeamento de apontamento** (F4): a normalização é por eixo e por
+   direção; qualquer combinação radial dos dois eixos antes da normalização reintroduz
+   o raio único que esta revisão remove.
+8. **Sem decisão de fonte por user agent** no cliente (F13.1, PC22): a seleção da fonte
+   de orientação não pode ler `navigator.userAgent` nem equivalente.
+9. **Constantes de precisão centralizadas e com dono único:** zona morta, sensibilidade,
+   alcances e suavização só aparecem em `config.py` (servidor); janela de captura,
+   estabilidade, retries e orçamento do assistente só aparecem no módulo de configuração
+   do cliente. **Única duplicação permitida:** `RANGE_MIN_DEG`/`RANGE_MAX_DEG` nos dois
+   lados (servidor é a autoridade; cliente pré-valida) — qualquer outra constante
+   duplicada entre os dois lados reprova, porque é divergência silenciosa esperando
+   acontecer.
+10. **`localStorage` com lista fechada de duas chaves** (endereço e perfil de alcances,
+    F3.5/F12.8): qualquer terceira chave reprova.
 
 ## Scripts utilitários
 
@@ -67,6 +94,21 @@ Automatizadas como testes (rodam no `pytest -q`):
   desativado por padrão.
 - Geração do certificado autoassinado: automática no primeiro start (F1) — sem passo
   manual obrigatório.
+
+## Interruptores de diagnóstico da precisão (F15)
+
+Não são ferramentas novas: são parâmetros do próprio produto, documentados no README e
+usados pelos testes e pelos procedimentos manuais comparativos.
+
+| Interruptor | Onde | Usado por |
+|---|---|---|
+| `?src=fusion_mag\|fusion_nomag\|sensor_api\|deviceorientation\|synthetic` (os quatro degraus da escada + a fonte de diagnóstico `synthetic`, que **nunca** é escolhida pela detecção automática — F13.1) | URL do controle | W25, W26, W28, PC24, L16, W28m |
+| `?mag=off` / `?magreject=off` | URL do controle | PC25, L16 |
+| `ADAPTIVE_SMOOTHING_ENABLED`, zonas mortas e sensibilidades por eixo, alcances padrão | `server/config.py` | M21–M27 |
+
+Regra: **um interruptor por frente**. Uma implementação que só permita ligar/desligar as
+quatro frentes em bloco reprova F15 — sem isolamento, uma regressão de precisão não tem
+como ser atribuída, e é a precisão que se está tentando medir.
 
 ## CI (opcional, não exigido pelo MVP)
 

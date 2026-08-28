@@ -159,9 +159,7 @@ class Jogo:
         )
 
     async def set_present(self, present: bool) -> None:
-        await self.page.evaluate(
-            "(v) => window.__fakeGamepad.set({ present: v })", present
-        )
+        await self.page.evaluate("(v) => window.__fakeGamepad.set({ present: v })", present)
 
     async def hold(self, index: int, pressed: bool) -> None:
         await self.page.evaluate(
@@ -222,9 +220,7 @@ async def jogo(browser, live_http_server):
     page.on("request", lambda req: handle.requests.append(req.url))
     page.on(
         "response",
-        lambda res: handle.failed.append(f"{res.status} {res.url}")
-        if res.status >= 400
-        else None,
+        lambda res: handle.failed.append(f"{res.status} {res.url}") if res.status >= 400 else None,
     )
 
     resposta = await page.goto(live_http_server.url, wait_until="load")
@@ -401,16 +397,14 @@ async def test_b7_corte_fim_a_fim(jogo):
     await jogo.page.wait_for_timeout(400)
     antes = await jogo.state()
 
-    entidade_id = await jogo.page.evaluate(
-        """() => {
+    entidade_id = await jogo.page.evaluate("""() => {
              const s = window.__fruitNinja.getState();
              const pf = s.playfield;
              return window.__fruitNinja.spawnForTest('fruit', {
                pos: { x: pf.x + pf.width / 2, y: pf.y + pf.height / 2 },
                vel: { x: 0, y: 0 },
              });
-           }"""
-    )
+           }""")
 
     await jogo.set_axes(0.7, 0.0)
     await jogo.page.wait_for_timeout(400)
@@ -498,16 +492,14 @@ async def test_b10_exatamente_uma_tela_visivel(jogo):
     await jogo.page.wait_for_timeout(150)
     assert await visiveis() == ["jogando"]
 
-    await jogo.page.evaluate(
-        """() => {
+    await jogo.page.evaluate("""() => {
              const s = window.__fruitNinja.getState();
              const pf = s.playfield;
              window.__fruitNinja.spawnForTest('bomb', {
                pos: { x: s.blade.pos.x, y: s.blade.pos.y },
                vel: { x: 0, y: 0 },
              });
-           }"""
-    )
+           }""")
     await jogo.set_axes(0.7, 0.4)
     await jogo.wait_screen("gameOver", timeout=3000)
     await jogo.page.wait_for_timeout(150)
@@ -523,15 +515,13 @@ async def test_b11_rumble_nao_derruba_o_quadro(jogo):
     await jogo.page.wait_for_timeout(400)
     antes = await jogo.state()
 
-    await jogo.page.evaluate(
-        """() => {
+    await jogo.page.evaluate("""() => {
              const pf = window.__fruitNinja.getState().playfield;
              window.__fruitNinja.spawnForTest('fruit', {
                pos: { x: pf.x + pf.width / 2, y: pf.y + pf.height / 2 },
                vel: { x: 0, y: 0 },
              });
-           }"""
-    )
+           }""")
     await jogo.set_axes(0.7, 0.0)
     await jogo.page.wait_for_timeout(500)
 
@@ -596,14 +586,12 @@ async def test_b15_diagnostico_e_somente_leitura(jogo):
     await jogo.page.wait_for_timeout(300)
 
     antes = await jogo.state()
-    await jogo.page.evaluate(
-        """() => {
+    await jogo.page.evaluate("""() => {
              const s = window.__fruitNinja.getState();
              s.score = 999;
              s.lives = 99;
              s.entities.length = 0;
-           }"""
-    )
+           }""")
     depois = await jogo.state()
     assert depois["score"] != 999, "getState devolveu uma referência viva ao estado"
     assert depois["score"] == antes["score"]
@@ -611,15 +599,13 @@ async def test_b15_diagnostico_e_somente_leitura(jogo):
 
     # spawnForTest não mexe em nível nem no relógio da partida (F14.7).
     nivel_antes = depois["level"]
-    await jogo.page.evaluate(
-        """() => {
+    await jogo.page.evaluate("""() => {
              const pf = window.__fruitNinja.getState().playfield;
              window.__fruitNinja.spawnForTest('fruit', {
                pos: { x: pf.x + 10, y: pf.y + pf.height - 10 },
                vel: { x: 0, y: -100 },
              });
-           }"""
-    )
+           }""")
     apos_spawn = await jogo.state()
     assert apos_spawn["level"] == nivel_antes, "spawnForTest alterou o nível"
 

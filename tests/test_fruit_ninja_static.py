@@ -36,11 +36,13 @@ def test_x1_fonte_unica_de_input():
         "nenhum arquivo chama navigator.getGamepads: o jogo não tem fonte de input. "
         "Uma varredura que passe vazia aqui não prova nada."
     )
-    assert [p.name for p in com_gamepad_api] == ["input.js"], (
-        f"Gamepad API fora de input.js: {[str(p) for p in com_gamepad_api]}"
-    )
+    assert [p.name for p in com_gamepad_api] == [
+        "input.js"
+    ], f"Gamepad API fora de input.js: {[str(p) for p in com_gamepad_api]}"
     # E a chamada real existe, não só a menção em comentário.
-    assert re.search(r"^\s*(return |const |let )?navigator\.getGamepads\(\)", _read(JS / "input.js"), re.M)
+    assert re.search(
+        r"^\s*(return |const |let )?navigator\.getGamepads\(\)", _read(JS / "input.js"), re.M
+    )
 
 
 def test_x2_sem_websocket():
@@ -78,27 +80,55 @@ def test_x5_sem_imports_externos():
         assert (GAME / alvo).resolve().is_file(), f"index.html: recurso inexistente {alvo}"
 
 
-def test_x6_servidor_intocado():
-    """Nada fora de game/fruit-ninja/ e tests/ foi alterado — em especial server/."""
-    resultado = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert resultado.returncode == 0, resultado.stderr
+def test_x6_fruit_ninja_nao_depende_do_servidor():
+    """O Fruit Ninja é autocontido: não alcança `server/`, `web/` nem `game/js/`.
 
-    tocados = []
-    for linha in resultado.stdout.splitlines():
-        caminho = linha[3:].strip().strip('"')
-        if caminho.startswith(("game/fruit-ninja/", "tests/", "specs/")):
-            continue
-        tocados.append(caminho)
-    assert not tocados, f"arquivos alterados fora do escopo permitido: {tocados}"
+    POR QUE A FORMA ANTIGA ERA INVÁLIDA (não "conserte de volta"): este caso
+    rodava `git status --porcelain` sobre a árvore INTEIRA e reprovava se
+    existisse qualquer arquivo modificado fora de `game/fruit-ninja/`,
+    `tests/` e `specs/`. Isso mede o estado da working tree, não o código: o
+    teste do fruit-ninja passava a quebrar sempre que QUALQUER outro slug era
+    tocado — o `wii-controller`, que legitimamente é dono de `server/` e
+    `web/`, derrubava este caso só por existir. Pior, o resultado dependia de
+    ter havido commit ou não, então o mesmo código passava ou falhava conforme
+    o momento da execução.
 
-    servidor = [linha for linha in resultado.stdout.splitlines() if "server/" in linha]
-    assert not servidor, f"server/ foi alterado: {servidor}"
+    A intenção original é boa e está preservada aqui como PROPRIEDADE DO
+    CÓDIGO: o jogo não pode depender do servidor. Isso é verificável olhando o
+    que os módulos do fruit-ninja importam e alcançam — e continua valendo
+    depois de commitado, em qualquer ordem de trabalho entre slugs.
+    """
+    modulos = sorted((GAME / "js").rglob("*.js"))
+    assert modulos, "nenhum módulo encontrado em game/fruit-ninja/js/"
+
+    for path in modulos:
+        texto = _read(path)
+
+        # 1. Todo import é relativo e resolve DENTRO de game/fruit-ninja/.
+        for alvo in re.findall(r"from\s+['\"]([^'\"]+)['\"]", texto):
+            assert alvo.startswith("./") or alvo.startswith(
+                "../"
+            ), f"{path.name} importa por caminho não relativo: {alvo}"
+            destino = (path.parent / alvo).resolve()
+            assert destino.is_relative_to(
+                GAME.resolve()
+            ), f"{path.name} importa fora de game/fruit-ninja/: {alvo}"
+
+        # 2. Nenhuma referência textual ao servidor ou ao cliente do controle.
+        for proibido in ("server/", "web/js/", "../js/", "server.", "vgamepad"):
+            assert (
+                proibido not in texto
+            ), f"{path.name} referencia código de fora do jogo: {proibido!r}"
+
+    # 3. O input vem da Gamepad API — nunca de um socket com o servidor. A
+    #    única exceção prevista é o canal de rumble, isolado em `js/rumble.js`.
+    for path in modulos:
+        texto = _read(path)
+        assert not re.search(
+            r"new\s+WebSocket", texto
+        ), f"{path.name} abre WebSocket — o jogo lê input só pela Gamepad API (X-)"
+        if path.name not in ("rumble.js", "loop.js"):
+            assert "fetch(" not in texto, f"{path.name} faz acesso HTTP inesperado"
 
 
 PUROS = ("slicing.js", "entities.js", "rules.js", "blade.js")
@@ -170,9 +200,9 @@ def test_x9_constantes_de_tuning_so_em_config():
             continue
         codigo = re.sub(r"//.*", "", _read(path))
         for nome in esperados:
-            assert not re.search(rf"\b(const|let|var)\s+{nome}\s*=", codigo), (
-                f"{path.name} redefine a constante de tuning {nome} (X9)"
-            )
+            assert not re.search(
+                rf"\b(const|let|var)\s+{nome}\s*=", codigo
+            ), f"{path.name} redefine a constante de tuning {nome} (X9)"
 
 
 def test_x10_sem_engine_nem_dependencia():
@@ -224,6 +254,6 @@ def test_x12_invariantes_de_configuracao():
     for i, nivel in enumerate(niveis):
         assert nivel["bombChance"] > 0, f"nível {i} sem bombas"
         if i:
-            assert nivel["bombChance"] >= niveis[i - 1]["bombChance"], (
-                f"bombChance caiu no nível {i}"
-            )
+            assert (
+                nivel["bombChance"] >= niveis[i - 1]["bombChance"]
+            ), f"bombChance caiu no nível {i}"

@@ -170,3 +170,88 @@ def test_l11_bateria_kpi10_manual():
 @hardware
 def test_l12_taxa_de_acerto_comparativa_manual():
     pytest.skip("Procedimento manual L12: comparação entre versões")
+
+
+# ---- manuais da revisão de precisão (L13–L17) ------------------------------
+# Cada um declara o que o operador deve OBSERVAR, não só o que executar: um
+# procedimento sem critério observável não é capaz de reprovar nada. Estes
+# ficam fora da execução padrão e NÃO contam como cobertura — o testing-report
+# precisa dizer explicitamente que seguem por verificar.
+
+
+@hardware
+def test_l13_simetria_de_precisao_entre_eixos_kpi19_manual():
+    """L13 (KPI-19) — a assimetria REAL do sensor, que M23 não alcança.
+
+    M23 prova que o processamento não introduz assimetria; só o aparelho diz se
+    o sensor tem.
+
+    Executar: com o aparelho calibrado e apoiado imóvel, registrar `tremor_x` e
+    `tremor_y` do overlay por 60 s; depois, com um alvo estático, medir o erro
+    de apontamento numa sequência de alvos HORIZONTAIS e outra de VERTICAIS.
+
+    Observar: razão entre `tremor_x` e `tremor_y` <= 2.0 E os erros dos dois
+    eixos na mesma ordem de grandeza. Um bom resultado "na média dos dois
+    eixos" NÃO aprova — o eixo pior é o que decide.
+    """
+    pytest.skip("Procedimento manual L13 (KPI-19): simetria de precisão no aparelho")
+
+
+@hardware
+def test_l14_ganho_da_calibracao_guiada_kpi20_manual():
+    """L14 (KPI-20) — o assistente serve para gente de pulso diferente?
+
+    Executar: com DUAS pessoas de alcance de pulso visivelmente diferente, cada
+    uma joga uma rodada (a) com os alcances padrão e (b) após concluir o
+    assistente.
+
+    Observar: após o assistente, ambas alcançam 4/4 bordas e 4/4 cantos sem
+    contorção, e nenhuma precisou editar constante de configuração. Registrar
+    qual das duas condições a pessoa prefere.
+    """
+    pytest.skip("Procedimento manual L14 (KPI-20): ganho da calibração guiada")
+
+
+@hardware
+def test_l15_custo_de_entrada_do_assistente_kpi21_manual():
+    """L15 (KPI-21) — o assistente é a primeira coisa entre o usuário e o jogo.
+
+    Executar: cronometrar, com pessoa que nunca usou o assistente, do início da
+    primeira etapa até o retorno ao estado `conectado`.
+
+    Observar: menos de 30 s. Registrar TAMBÉM quantas etapas exigiram
+    repetição — muita repetição indica critério de estabilidade apertado demais
+    para a mão real (a parte configurada do orçamento é o L18/PC11b, já
+    automatizado).
+    """
+    pytest.skip("Procedimento manual L15 (KPI-21): < 30 s com pessoa real")
+
+
+@hardware
+def test_l16_melhoria_medida_da_deriva_kpi22_manual():
+    """L16 (KPI-22) — é ESTE o critério de aceite da frente 4, e ele é medido.
+
+    Executar: repetir o L8 duas vezes na mesma sessão, no mesmo lugar e com o
+    mesmo aparelho: (a) `?src=deviceorientation` e (b) `?src=fusion_mag`.
+    Opcionalmente repetir com `?magreject=off` para separar o ganho da fusão do
+    ganho da rejeição.
+
+    Observar: a deriva horizontal em graus de (b) é ESTRITAMENTE MENOR que a de
+    (a). Se (b) não for melhor, a frente 4 reprova — não se intui esse ganho.
+    """
+    pytest.skip("Procedimento manual L16 (KPI-22): deriva de fusion_mag < deviceorientation")
+
+
+@hardware
+def test_l17_interferencia_provocada_kpi24_manual():
+    """L17 (KPI-24) — confirmação no hardware do que PC12 mede em sintético.
+
+    Executar: aproximar o aparelho de uma fonte de interferência real (gabinete
+    do PC, monitor, fonte).
+
+    Observar: o indicador de rejeição magnética ACENDE e a mira NÃO é puxada
+    para o lado enquanto ele estiver aceso. O gate automatizado é o PC12; este
+    caso confirma que a faixa de rejeição escolhida corresponde à interferência
+    do mundo real.
+    """
+    pytest.skip("Procedimento manual L17 (KPI-24): interferência real acende o indicador")

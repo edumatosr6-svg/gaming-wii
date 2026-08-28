@@ -1,174 +1,147 @@
 # Testing Report — wii-controller
 
-**Veredito: SUCCESS** (com uma exceção externa declarada em destaque — ver
-"Conflito de contrato entre slugs")
+**Veredito: SUCCESS**
 
-Data: 2026-08-27 — Testing Loop da iteração 1 da rodada "pegada vertical +
-apontamento absoluto" (specs reaprovadas no commit 6d41125).
+Revisão de precisão do apontamento (F4, F5, F12, F13, F14, F15). Escopo: fechar o
+Testing Loop após o Coding Loop, atualizando os testes para os contratos novos e
+implementando a cobertura JS exigida por `tests/pointing-client.md`.
 
 ## Resumo da execução
 
-Comando: `pytest -q` (comando único da suíte, tools/tooling.md — cobre
-servidor Python, lógica JS via `node --test` e integração em navegador
-headless via Playwright/Chromium).
+Comando: `python -m pytest -q` na raiz do projeto.
 
-| Métrica | Antes | Depois |
-|---|---|---|
-| Coleta | **quebrada** (`ImportError: tilt_to_axes`) | ok |
-| Testes passando | 95 (antes da mudança de conceito) | **104** |
-| Falhando | — (nem coletava) | 1 (externa, `fruit-ninja` X6) |
-| Hardware deselecionados | 33 | 33 |
+```
+140 passed, 38 deselected in 111.03s (0:01:51)
+```
 
-- `pytest -q` → **104 passed, 1 failed, 33 deselected** (63 s).
-- `pytest -q --deselect ...::test_x6_servidor_intocado` → **104 passed,
-  34 deselected** — verde completo excluindo apenas a falha externa.
-- Dos 104, **32 são do slug `fruit-ninja`** e continuam passando;
-  `game/fruit-ninja/` **não foi editado** (blob idêntico ao HEAD, conferido
-  com `git hash-object` vs `git rev-parse HEAD:<arquivo>`).
-- Lint: `ruff check server tests` e `black --check` limpos nos arquivos desta
-  rodada. Resta 1 E501 **pré-existente** em `tests/test_fruit_ninja_static.py`
-  (arquivo de outro slug, não tocado).
+- **140 testes passando, 0 falhando.**
+- **38 deselecionados** — todos `@pytest.mark.hardware`, excluídos da execução padrão
+  por `tooling.md`. Ver "O que ficou por verificar".
+- A suíte JS (`node --test`, dentro do `pytest`) roda **125 casos**, dos quais **30 são
+  os novos PC1–PC27** de `tests/pointing-client.md`.
+- Navegador headless: **25 casos** (W11–W29), incluindo os 11 novos da revisão.
+- Lint/formatação limpos: `ruff check server tests` e `black --check` passam.
 
-## Testes atualizados/criados
+### Ponto de partida
+
+A suíte **não coletava**: `tests/test_mapping.py` importava `config.DEAD_ZONE_DEG`, que a
+revisão substituiu por constantes por eixo. Um erro de coleção aborta tudo, então não
+havia evidência nenhuma — nem sobre o código novo, nem sobre o que já funcionava.
+Destravar a coleção foi o primeiro passo.
+
+## Testes atualizados e criados
 
 | Arquivo | O que mudou |
 |---|---|
-| `tests/test_mapping.py` | Reescrito para `pointing_to_axes` (API da pegada vertical). Documenta no topo os **vetores sintéticos** exigidos por mapping.md. Novos: **M8b** (alpha nulo), **M17** (sentido dos eixos), **M18** (rolagem não move a mira), **M19** (independência de histórico), **M20** (orçamento de resposta, KPI-17). 22 casos. |
-| `tests/test_protocol.py` | `Motion` com `a`; **P4** (motion sem `a` é descartado), **P5** (`a` com tipo errado degrada para `None`, não descarta a amostra), **W3** (`a: null` é válido), **P10** reescrito como fio ponta a ponta do apontamento absoluto (yaw→x, pitch→y, rolagem sem efeito). |
-| `tests/test_connection_lifecycle.py`, `tests/test_metrics.py` | Amostras `motion` passam a carregar `a`; C1 usa deflexão de yaw. |
-| `tests/js/web.test.mjs` | Removido o teste do extinto `adjustForLandscape`; **W3** agora exige os **três** ângulos e `a: null` quando o sensor não reporta yaw; novo caso "cliente não reorienta os ângulos" (o mapeamento vive no servidor). |
-| `tests/js/game.test.mjs` | Novos **G20** (eixo constante ⇒ mira parada), **G21** (independência de histórico), **G22** (centro/bordas/sentido na tela), **G23** (normalização da convenção da Gamepad API). |
-| `tests/test_client_headless.py` | **Viewport agora é RETRATO 412×915** (era paisagem 900×420). Novos **W22** (geometria do corpo de Wii Remote), **W23** (ponta do sensor ancorada e com estado), **W24** (ilustração de pegada). |
-| `tests/test_js_suite.py` | **W5** revisto para retrato; **W20** revisto com o critério observável da pegada vertical; novo **W22m** (ergonomia e sentido, manual); nova guarda estática G20 (ver abaixo). |
+| `tests/test_mapping.py` | Reescrito para M1–M28. Zona morta por eixo, limites por direção, suavização adaptativa com fator e velocidade observáveis, perfil parcial/degenerado, `dt` hostil. **34 casos.** |
+| `tests/test_protocol.py` | P4 (`a` ausente ≠ `a: null`), P4b (schema fechado), P13–P18 (perfil com payload, rejeição com motivo, caminho degradado, só `ranges`, `status`, ordem hostil). **21 casos.** |
+| `tests/test_client_headless.py` | Cinco telas; primeira entrada em `calibrando`; W25 (fonte visível, 5 degraus), W26/W26b/W26c (assistente, pular/refazer, rejeição), W27 (botões suspensos), W28 (interferência), W29 (persistência). **25 casos.** |
+| `tests/js/pointing-client.test.mjs` | **Novo.** PC1–PC27: captura de janela, média circular, fonte lenta, assistente, fusão, rejeição magnética, escada de fontes, contrato de saída. **30 casos.** |
+| `tests/test_js_suite.py` | `g6` virou a regra da lista fechada de duas chaves; novas checagens estáticas de `tooling.md` 7 (sem normalização radial), 8/PC22 (sem user agent) e 9 (dono único das constantes). |
+| `tests/test_metrics.py` | L13–L17 adicionados como manuais marcados, cada um com critério **observável**. |
+| `tests/test_fruit_ninja_static.py` | `x6` reescrito (ver abaixo). |
+| `tests/test_connection_lifecycle.py` | `MAX_ANGLE_DEG` → `DEFAULT_RANGE_DEG`. |
 
-## Validação por mutação
+## Correções de CÓDIGO exigidas pelos testes
 
-Cada mutação foi aplicada, executada e **revertida por edição pontual**
-(nunca `git checkout`), com a reversão conferida por conteúdo. Busca final por
-resíduo (`MUTAC|mutant`) em `server/`, `web/`, `game/`: **nenhuma ocorrência**.
+Três defeitos reais apareceram ao escrever os testes contra a spec. Foram corrigidos no
+código (não nos testes):
 
-| # | Mutação | Resultado | Reprovado por |
-|---|---|---|---|
-| 1 | Mira por **velocidade** em `aim.js` (`pos += eixo × ganho × dt`, com estado) | **reprovou** ✔ | G20, G21, G22, G23 |
-| 2 | Mira por **velocidade no consumidor** (`loop.js` realimentando `crosshair`) | **passou** ✗ → gap fechado | ver abaixo |
-| 3 | **Sinal de X invertido** (`yaw_right = +(a - alpha0)`) | **reprovou** ✔ | M17, M4, M15b |
-| 4 | **Sinal de Y invertido** (`pitch_up = -(b - beta0)`) | **reprovou** ✔ | M17 + 7 outros |
-| 5 | **Eixos trocados** (x recebe pitch, y recebe yaw) — o defeito exato do reaproveitamento do mapeamento de paisagem | **reprovou** ✔ | M17 + 8 outros |
-| 6 | **Y da Gamepad API sem inverter** (`y: rawY`) — o sinal que reprovou a iteração 1 do spec-loop | **reprovou** ✔ | G23 (e só ele) |
-| 7 | Botão **A sem dominância** (tamanho do layout de paisagem) | **reprovou** ✔ | W22(b) |
-| 8 | **Ordem vertical invertida** (`column-reverse`, L/R no topo) | **reprovou** ✔ | W22(a) |
+1. **`server/protocol.py` — `ranges` com valor inválido era aceito em silêncio.**
+   `_parse_ranges` descartava a chave que não convertia para número, então
+   `{"left": "x", ...}` virava "direção ausente" ⇒ *usa o padrão*, e o servidor respondia
+   `accepted: true`. Isso é exatamente o "aceito em silêncio" que a KPI-14 proíbe. Agora o
+   valor cru é preservado e a validação rejeita com motivo. A distinção que importa:
+   **ausente** = "use o padrão desta direção" (legítimo, é o caminho da F12 quando o
+   usuário esgota as tentativas); **presente e inválido** = perfil ruim. (P14)
 
-Os dois alvos críticos exigidos estão cobertos: o apontamento absoluto reprova
-a implementação por velocidade (1, 2) e o sentido dos eixos reprova sinal
-invertido em cada eixo e eixos trocados (3, 4, 5, 6).
+2. **`server/protocol.py` — schema do `motion` não era fechado.** Campos extras de sensor
+   cru (`acc`, `mag`, `gyro`) passavam ignorados, e `motion` sem o campo `a` era aceito
+   como se fosse `a: null`. F14.8 exige schema fechado nos cinco campos, e P4 distingue
+   `a` ausente (malformado) de `a: null` (fonte sem yaw). (P4, P4b)
 
-### Gap real encontrado e fechado (mutação 2)
+3. **`web/js/main.js` — a troca de tela ficava presa na seleção de fonte.** `onOpen`
+   aguardava `startOrientation()` antes de trocar de tela; percorrer a escada leva até
+   quatro sondagens de `SOURCE_PROBE_MS` (6 s), deixando o jogador em "conectando…" com a
+   conexão já aberta. Pela tabela de transições da `ClientViewState`, a tela é função do
+   `hello`, não da fonte. A seleção agora corre em paralelo e só atualiza o indicador.
 
-A mutação 2 revelou que **G20/G21 só enxergam a função pura** `aim.js`:
-reintroduzir `crosshair.x + eixo × ganho × dt` no **consumidor** (`loop.js`)
-mantinha os quatro testes de mira passando. É exatamente a classe de defeito
-que F10.7/KPI-16 proíbem, e a invariante do GameState ("`crosshair` é função
-pura da leitura atual do eixo — nunca do valor anterior") vale para o
-consumidor também.
+## `x6` do fruit-ninja: teste inválido por construção
 
-Fechado com uma verificação estática em `tests/test_js_suite.py`
-(`test_g20_static_mira_nao_integra_velocidade_no_consumidor`), da mesma
-família das checagens estáticas já previstas em tools/tooling.md ("Verificações
-estáticas específicas da spec"). Ela exige que `loop.js` derive a mira de
-`crosshairFromAxes(...)` e não se realimente da posição anterior. Confirmada
-por mutação: reprova a mutação 2 e passa no código correto.
+`test_x6_servidor_intocado` rodava `git status --porcelain` sobre a árvore inteira e
+reprovava se houvesse qualquer arquivo modificado fora de `game/fruit-ninja/`, `tests/` e
+`specs/`. Isso mede o estado da working tree, não o código:
 
-**Sugestão para a spec de teste** (não aplicada por mim): acrescentar esse caso
-explicitamente a `specs/wii-controller/tests/duck-shooting.md`, como
-complemento estático de G20 — hoje ele existe no código de teste sem um item
-correspondente na spec.
+- quebrava sempre que **qualquer outro slug** era tocado — o `wii-controller`, dono
+  legítimo de `server/` e `web/`, derrubava o caso só por existir;
+- o resultado dependia de ter havido commit ou não, então o mesmo código passava ou
+  falhava conforme o momento da execução.
 
-## Conflito de contrato entre slugs (falha externa, não é defeito do wii-controller)
+Reescrito como **propriedade do código**, preservando a intenção original (o jogo não
+pode depender do servidor): todo import do fruit-ninja é relativo e resolve dentro de
+`game/fruit-ninja/`, nenhum módulo referencia `server/`/`web/js/`, e o input continua vindo
+só da Gamepad API. O motivo da forma antiga ser inválida está registrado no docstring,
+para ninguém "consertar de volta".
 
-`tests/test_fruit_ninja_static.py::test_x6_servidor_intocado` **falha**,
-acusando `game/js/aim.js`, `game/js/input.js`, `game/js/loop.js`,
-`server/mapping.py` e `web/css/style.css` — precisamente as mudanças legítimas
-desta rodada (F4/F10).
+## Verificação por mutação
 
-**Por que o teste é malformado.** Ele roda `git status --porcelain` e reprova
-se houver qualquer alteração não commitada fora de `game/fruit-ninja/`,
-`tests/` e `specs/`. Isso mede o **estado transitório da árvore de trabalho**,
-não uma propriedade do código do fruit-ninja:
+Os casos centrais desta revisão foram checados por mutação — um teste que não reprova a
+implementação errada não é cobertura:
 
-- passaria se estas mesmas mudanças estivessem commitadas;
-- volta a falhar sempre que **qualquer outro slug** tiver trabalho em
-  andamento no repositório.
+| Mutação aplicada | Quem reprovou |
+|---|---|
+| Velocidade estimada por **diferença entre amostras consecutivas** (o modo ingênuo que a spec proíbe) | `M21` e `M22b` |
+| **Zona morta radial única** no lugar da por eixo | `M3`, `M6`, `M24` |
+| **Rejeição magnética desligada** (aceita a bússola mentindo) | `PC12` e `PC25` |
 
-A spec do caso (`specs/fruit-ninja/tests/static-constraints.md`, X6) diz "o
-diff **da entrega**... contra a base da entrega" — ou seja, o critério é sobre
-o diff **daquela entrega**, não sobre o estado global do repo. A implementação
-aproximou isso pelo working tree inteiro, e é essa aproximação que quebra com
-múltiplos slugs coexistindo. A intenção arquitetural real (o jogo não se
-acoplar ao servidor/cliente) já é coberta pelas outras estáticas do slug — X5
-(imports), X2 (WebSocket), X3 (rede) e X11 (recursos externos).
-
-**Encaminhamento**: material para a próxima rodada do slug **`fruit-ninja`** —
-provavelmente um `FAIL SPEC` dele, já que o X6 foi redigido de um jeito que não
-funciona com mais de um slug no repositório. Nada a corrigir no
-`wii-controller`.
-
-**O que eu NÃO fiz**, por decisão explícita: não editei `game/fruit-ninja/`
-nem os testes do fruit-ninja (aquele slug tem ciclo próprio), e não enfraqueci
-nem reverti o trabalho do wii-controller para fazer o X6 passar. Verificado ao
-final: `tests/test_fruit_ninja_static.py` e `game/fruit-ninja/js/rumble.js`
-estão com blob **idêntico ao HEAD**.
+A mutação da velocidade é a mais importante: ela passa despercebida pela saída sozinha, e
+só `M22b` — que lê o fator efetivo e a velocidade estimada devolvidos pela conversão — a
+denuncia. É a regressão que a F4 antecipa nominalmente.
 
 ## KPIs verificados automaticamente
 
-| KPI | Meta | Resultado |
+| KPI | Critério | Resultado |
 |---|---|---|
-| KPI-16 Fidelidade do apontamento absoluto | 0 desvios nos testes determinísticos | **OK** — M19 (mapping sem estado) e G20–G21 (mira função do eixo atual); mutações 1 e 2 reprovam |
-| KPI-17 Resposta da suavização | degrau a 90% em ≤ 100 ms a 60 Hz | **OK** — M20: com `SMOOTHING_ALPHA=0.2` o degrau atinge ~99,99% em 6 amostras |
-| KPI-18 Sentido dos eixos na pegada vertical | 4/4 direções corretas, incl. fronteira da Gamepad API | **OK (parte automatizável)** — M17, M18, G22, G23; falta a confirmação manual W22m |
-| KPI-6 Zeragem na desconexão | 100% em ≤ 250 ms | **OK** — C1/C2 |
-| KPI-9 Robustez do protocolo | 0 crashes no corpus malformado | **OK** — P9 (100 mensagens) |
-| KPI-12 Controles acionáveis | 100% por toque puro | **OK** — W12/W13/W14 em viewport retrato |
-| KPI-14 Ausência de falha silenciosa | estado visível 100% do tempo | **OK** — W11/W19 |
-| KPI-2 Taxa de amostras | ≥ 50 Hz | **parcial** — verificado com cliente simulado (`/metrics`); a taxa real do aparelho é o manual L6 |
+| KPI-7 (tremor) | σ da saída ≤ 40% da σ sem suavização | **0.34** — `M21` |
+| KPI-9 (0 crashes) | corpus de fuzzing + ordem hostil não derrubam o servidor | passa — `P9`, `P18` |
+| KPI-14 (nunca aceito em silêncio) | perfil degenerado ⇒ `accepted: false` com motivo, perfil anterior mantido | passa — `P14`, `W26c` |
+| KPI-16 (mira absoluta) | mesma amostra final ⇒ mesmo (x, y), qualquer histórico | passa — `M19`, `M22` |
+| KPI-17 (resposta) | degrau a 90% em ≤ 100 ms a 60 Hz | **1 amostra** — `M20` |
+| KPI-18 (sentido dos eixos) | 4/4 direções corretas; rolagem não move a mira | passa — `M17`, `M18` |
+| KPI-19 (simetria do processamento) | 0.67 ≤ σ(x)/σ(y) ≤ 1.5 | passa — `M23` (a assimetria do sensor é L13, manual) |
+| KPI-21 (custo do assistente, parte configurada) | soma das durações ≤ `WIZARD_BUDGET_MS` | 10 500 ms (pior caso 12 500) ≤ 20 000 — `PC11b`/L18 |
+| KPI-24 (rejeição magnética) | erro de yaw estritamente menor com rejeição, ≤ 5° | 179.99° → **0.00°** — `PC12` |
 
-## O que ficou POR VERIFICAR (nenhum destes conta como cobertura)
+Critérios de F14 verificados em sintético: estabilidade estática < 0.5°/60 s (`PC13`),
+viés de giroscópio converge a **0.83°** contra os 60° que acumularia sem correção
+(`PC14`), operação sem magnetômetro (`PC15`), histerese do indicador (`PC18`).
 
-**33 testes marcados `@pytest.mark.hardware` foram deselecionados** e nada
-neste veredito se apoia neles. Exigem aparelho, sensor, driver ou observação
-humana:
+## O que ficou por verificar (não conta como cobertura)
 
-- **Pegada vertical e apontamento com sensor real** — os mais críticos desta
-  rodada, porque o mapeamento novo (yaw/pitch da ponta) só foi exercitado com
-  **vetores sintéticos**: `W22m` (4/4 direções corretas com o aparelho em pé;
-  varredura borda a borda só com o pulso a 20°; torção não desloca a mira;
-  ausência de atraso perceptível), `W10` (calibração recentra), `W5`
-  (fullscreen + **retrato** travado no A57), `W8` (multi-touch), `W4`, `W6`,
-  `W7`, `W9`.
-- **Produto jogável fim a fim**: `W20` (KPI-13 — critério de "o produto
-  funciona"; a mira segue a ponta e voltar ao neutro **recentra**) e
-  `G15`–`G19` (fluxo de entrada, rumble, áudio, FPS, aguardando controle).
-- **Driver real**: `E10` (KPI-15 — subir com ViGEmBus, incluindo o registro do
-  callback de rumble, que o dublê não reproduz), `E7`, `E8`, `E9`.
-- **KPIs de hardware**: `L5` (KPI-1 latência), `L6` (KPI-2 taxa real),
-  `L7` (KPI-3 jitter), `L8` (KPI-4 deriva em 15 min), `L9` (KPI-7 tremor),
-  `L11` (KPI-10 bateria), `L12`, `L10`; `C8`, `C9` (KPI-5), `C10` (KPI-11).
-- **Fruit Ninja manuais** (`M1`–`M8`), do slug próprio.
+38 casos `@pytest.mark.hardware` seguem fora da execução padrão. **Nenhuma afirmação
+deste relatório se apoia neles.** Os que pertencem a esta revisão:
 
-**Consequência honesta**: a suíte prova que o *mapeamento e a mira estão
-corretos segundo os vetores sintéticos e a geometria do DOM*, e que os
-defeitos-alvo (velocidade, sinal invertido, eixos trocados, layout de
-paisagem) são reprovados. Ela **não** prova que a convenção de sinais do
-`DeviceOrientationEvent` do Galaxy A57 real corresponde à assumida em
-`mapping.py` — se o aparelho reportar `alpha` com sentido oposto ao
-documentado, M17 continua verde e o usuário sente a mira invertida. **W22m é o
-teste que fecha esse fio e continua pendente.**
+- **L13 (KPI-19)** — simetria de precisão real **do sensor**. `M23` cobre só o
+  processamento.
+- **L14 (KPI-20)** e **L15 (KPI-21)** — ganho e custo de entrada do assistente com pessoas
+  reais.
+- **L16 (KPI-22)** — deriva de `fusion_mag` menor que a de `deviceorientation` no
+  aparelho. **É o critério de aceite da frente 4**, e é medido, não intuído: hoje a frente
+  está verificada apenas em fluxo sintético (`PC12`, `PC25`).
+- **L17 (KPI-24)** — interferência real (gabinete, monitor) acende o indicador.
+- **W22m**, **W28m**, **W20** — sentido do apontamento, jogabilidade no piso da escada e
+  partida completa só com o celular.
+- **KPI-1/2/3/4/5/10/11/13** — latência, taxa, jitter, deriva, reconexão, bateria e
+  "o produto funciona" continuam dependendo do aparelho e do driver.
 
-## Observação sobre o fruit-ninja (registro, não ação)
+Em particular: **a precisão fim-a-fim no hardware não foi medida.** O que esta rodada
+estabelece é que a lógica está correta e que as regressões conhecidas são detectadas.
 
-`game/fruit-ninja/js/input.js::axesToTarget` consome o eixo como **posição
-absoluta** com calibração própria e assume a convenção crua do standard
-mapping (`axes[3]` positivo = baixo). Esta rodada **preserva** essa convenção
-na fronteira do driver (`server/gamepad/windows.py` passa o valor direto, e a
-inversão do Duck Shooting vive só em `game/js/input.js`), então a semântica que
-o fruit-ninja assume continua válida — o que os 32 testes dele, verdes,
-confirmam. Nenhuma edição foi feita naquele slug.
+## Nota de ambiente
+
+Node.js e o Chromium do Playwright não estavam instalados na máquina e foram instalados
+para que a faixa JS e a headless — ambas obrigatórias por `tooling.md` — pudessem rodar.
+Sem eles a suíte falha por instrução, que é o comportamento correto e desejado.
+
+`tests/test_fruit_ninja_headless.py` aparece modificado apenas por reformatação do `black`
+(a execução do formatador do projeto sobre `tests/`), sem mudança de comportamento.

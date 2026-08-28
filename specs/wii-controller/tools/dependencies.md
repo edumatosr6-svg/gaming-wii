@@ -30,10 +30,29 @@ formatação local dos arquivos JS estáticos — não introduz build step nem d
 runtime).
 
 `playwright` (Python) dirigindo Chromium: exigido pelos testes de integração em
-navegador headless (W11–W19), que são obrigatórios na suíte padrão. É dependência de
+navegador headless (W11–W29), que são obrigatórios na suíte padrão. É dependência de
 **desenvolvimento apenas** — não entra no runtime, não introduz build step e não afeta
 a regra de o cliente ser vanilla sem npm. Requer o passo único
 `playwright install chromium`, documentado no README.
+
+## Revisão de precisão: nenhuma dependência nova
+
+A frente de precisão (fusão de sensores, rejeição magnética, escada de fontes,
+calibração guiada, suavização adaptativa) **não adiciona nenhuma dependência**, e isso é
+requisito, não coincidência:
+
+- A **fusão é JavaScript puro** servido como arquivo estático — proibido resolver com
+  biblioteca de fusão via npm/CDN, o que reintroduziria build step e dependência de
+  runtime no cliente (restrição das coding directives e do `descriptions.md`).
+- As **APIs de sensor** usadas (evento clássico, API de sensores moderna e sensores
+  crus) são do próprio navegador; a disponibilidade é detectada em runtime (F13), nunca
+  presumida — não há polyfill, e um aparelho sem magnetômetro continua jogando.
+- No **servidor**, as mudanças (zonas mortas por eixo, limites por direção, suavização
+  adaptativa, validação de perfil, `tremor_x`/`tremor_y`) são aritmética em módulo puro:
+  sem numpy, sem scipy, sem biblioteca de filtro.
+- Os testes novos usam o que já existe: `node --test` embutido para a faixa JS
+  (PC1–PC27) e Playwright para os headless — a fonte `synthetic` (F13) substitui
+  qualquer necessidade de emulação de sensores por ferramenta externa.
 
 ## Explicitamente não usar
 

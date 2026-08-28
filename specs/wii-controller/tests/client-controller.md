@@ -40,19 +40,29 @@ defeito que chegou ao usuário final e que nenhuma outra faixa de teste detectar
 em viewport de paisagem valida um layout que não existe mais e mascara todos os
 defeitos de disposição.
 
-- **W11 — Uma tela por vez**: dado o cliente em cada um dos quatro estados
-  (`pareamento`, `conectando`, `conectado`, `desconectado`), quando se mede a caixa de
-  layout de todas as telas, então exatamente uma tem área maior que zero (F2.5).
-  *Pega o caso de uma regra de CSS anular o mecanismo de alternância — a tela de
+**Fonte de orientação nos testes headless:** o navegador headless não tem sensores. Os
+casos que precisam de orientação usam o degrau `synthetic` da escada da F13
+(`?src=synthetic`), que injeta um fluxo de amostras roteirizado pelo teste. Sem essa
+costura, toda a faixa de assistente/fonte/interferência ficaria sem cobertura headless —
+que é exatamente onde os defeitos deste projeto sempre viveram.
+
+- **W11 — Uma tela por vez**: dado o cliente em cada um dos **cinco** estados
+  (`pareamento`, `conectando`, `conectado`, `calibrando`, `desconectado`), quando se
+  mede a caixa de layout de todas as telas, então exatamente uma tem área maior que zero
+  (F2.5). *Pega o caso de uma regra de CSS anular o mecanismo de alternância — a tela de
   pareamento permanecia sobre um controle já conectado e funcional.*
 - **W12 — Toque aciona todos os controles**: dado a página conectada, quando cada um
   dos 12 botões recebe uma sequência de toque completa (**sem nenhum evento `click`**),
   então cada um envia sua mensagem `button` com `down: true` e depois `down: false`
   (F2.6, F6.2).
 - **W13 — Calibrar responde ao toque**: dado a página conectada, quando o comando de
-  calibrar recebe uma sequência de toque (sem `click`), então a mensagem `calibrate`
-  é enviada (F2.6). *O comando estava ligado apenas a `click`, que o tratamento
-  multi-touch suprime: funcionava com mouse e era inerte no celular.*
+  calibrar recebe uma sequência de toque (sem `click`), então a captura de janela começa
+  (a instrução de segurar parado fica visível) e a mensagem `calibrate` **com payload de
+  centro** é enviada ao fim da janela — isto é, **depois** de `CALIB_WINDOW_MS`, não no
+  toque (F2.6, F5). *O comando estava ligado apenas a `click`, que o tratamento
+  multi-touch suprime: funcionava com mouse e era inerte no celular. **Onde observar:**
+  o teste precisa aguardar a janela; medir só "saiu alguma mensagem no toque" passaria
+  com a calibração instantânea que esta revisão remove.*
 - **W14 — Nada intercepta o toque**: dado a tela do controle visível, quando se
   consulta qual elemento está no ponto central de cada controle acionável, então esse
   elemento é o próprio controle ou um descendente dele — nunca uma faixa de status,
@@ -108,7 +118,7 @@ defeitos de disposição.
   do A do que dos centros de qualquer botão do D-pad, de L e de R. *Reprova o
   reaproveitamento do layout de paisagem, que não tem nem a ordem nem a dominância do
   A.*
-- **W23 — Ponta do sensor ancorada e com estado**: dado cada um dos quatro estados de
+- **W23 — Ponta do sensor ancorada e com estado**: dado cada um dos **cinco** estados de
   `ClientViewState`, quando se inspeciona o elemento da ponta do sensor, então na
   tela `conectado` ele está visível acima de todos os controles acionáveis (menor
   centro-y), e em cada estado ele carrega classe/atributo distinto que reflete o
@@ -118,6 +128,38 @@ defeitos de disposição.
   então ele tem área maior que zero em ambos (critério F2.12). *A tela de entrada
   deve ensinar a pegada vertical sem manual — a ilustração ausente ou oculta por CSS
   reprova.*
+- **W25 — Fonte de orientação visível e correta (KPI-23)**: dado a página aberta com
+  `?src=<degrau>` para cada degrau da F13 (incluindo `synthetic`), quando se inspeciona
+  o indicador de fonte nas telas `conectado` e `calibrando`, então ele está visível
+  (área > 0) e exibe o rótulo do degrau forçado (critério F2.13, F13.4). *Sem isso, a
+  primeira pergunta de qualquer comparação entre aparelhos ("qual fonte cada um está
+  usando?") só teria resposta depurando.*
+- **W26 — Assistente de calibração completo em headless (F12)**: dado `?src=synthetic`
+  com um fluxo roteirizado (neutro, esquerda, direita, cima, baixo), quando o assistente
+  é percorrido tocando em "capturar" em cada etapa, então: (a) uma etapa visível por vez
+  (F2.15); (b) a instrução de segurar parado aparece durante cada captura; (c) ao final,
+  sai pelo socket um `calibrate` **com payload** contendo quatro alcances independentes
+  coerentes com o fluxo injetado; (d) o cliente volta ao estado `conectado` ao receber
+  `calibration_applied {accepted: true}`.
+- **W26b — Pular e refazer**: o comando de pular encerra o assistente aplicando os
+  alcances padrão (F12.5); a partir de `conectado`, o comando de refazer volta ao estado
+  `calibrando` sem reconectar.
+- **W26c — Rejeição não passa em silêncio**: dado o servidor respondendo
+  `calibration_applied {accepted: false, reason: ...}`, então a tela exibe o motivo e
+  oferece refazer — o cliente não segue como se tivesse calibrado (F12, KPI-14).
+- **W27 — Botões suspensos durante a calibração (F2.16)**: dado o estado `calibrando`,
+  quando se aciona por toque um botão de gamepad, então **nenhuma** mensagem `button`
+  sai pelo socket; e mensagens `motion` continuam saindo no mesmo intervalo. *Evita
+  disparar no jogo enquanto o usuário calibra.*
+- **W28 — Indicador de interferência magnética (F2.14)**: dado `?src=synthetic` com um
+  trecho de leituras magnéticas fora do esperado, quando o trecho começa, então o
+  indicador de rejeição fica visível **sem trocar de tela**, e volta a ocultar quando o
+  trecho termina.
+- **W29 — Persistência do perfil (F12.6)**: dado um assistente concluído, quando a
+  página é recarregada, então o cliente reenvia os quatro alcances sem exibir as quatro
+  etapas de extremo, **e** pede a captura de centro de novo; `localStorage` contém
+  exatamente duas chaves (endereço e perfil de alcances) e nenhuma de estado de jogo
+  (F3.5, F12.8).
 
 ## Manuais no aparelho de referência [manual/hardware]
 
@@ -142,9 +184,18 @@ procedimento sem critério observável não pode reprovar uma implementação er
 - **W9 — Vibração**: mensagem `vibrate` de teste. *Observar:* o aparelho vibra com
   intensidade e duração perceptivelmente proporcionais; intensidade 0 interrompe a
   vibração em andamento (F8.2).
-- **W10 — Calibração com sensor real**: inclinar o aparelho e tocar em calibrar.
-  *Observar:* a mira volta ao centro imediatamente e ali permanece com o aparelho
-  parado; repetir a calibração em outra posição funciona sem reconectar (F5.1, F5.2).
+- **W10 — Calibração de centro com sensor real**: inclinar o aparelho e tocar em
+  calibrar. *Observar:* a tela pede para **segurar parado** e mostra o progresso da
+  janela; ao fim da captura a mira vai para o centro e ali permanece com o aparelho
+  parado; mexer o aparelho durante a captura faz a interface **pedir repetição** em vez
+  de aceitar um centro ruim; repetir a calibração em outra posição funciona sem
+  reconectar (F5.1, F5.2, F5.6).
+- **W28m — Jogável no pior degrau da escada (KPI-23)**: abrir o controle com
+  `?src=deviceorientation` e jogar uma rodada completa de Duck Shooting. *Observar:* o
+  indicador de fonte mostra `deviceorientation`, a mira responde e a partida é
+  concluída — pior precisão é aceitável, controle inutilizável não é (F13.5). Repetir,
+  se houver aparelho sem magnetômetro disponível, confirmando que ele joga em
+  `fusion_nomag`.
 - **W20 — Sessão jogável fim-a-fim**: com o servidor no ar e o Duck Shooting aberto no
   PC, jogar uma rodada completa usando apenas o celular, **segurando-o em pé como um
   Wii Remote**. *Observar:* **a mira está onde a ponta do aparelho aponta** (apontar
@@ -157,7 +208,8 @@ procedimento sem critério observável não pode reprovar uma implementação er
   **direita** move a mira para a **direita**; para a esquerda, esquerda; **levantar**
   a ponta move a mira para **cima**; abaixar, baixo — 4/4 direções corretas, sem
   nenhuma inversão; (b) varrer a mira de uma borda à outra da tela é possível **só
-  com o giro do pulso**, sem mover o cotovelo (`MAX_ANGLE_DEG` padrão de 20° — se
+  com o giro do pulso**, sem mover o cotovelo (`DEFAULT_RANGE_DEG` padrão de 20° por
+  direção, ou os alcances medidos no assistente da F12 — se
   exigir o braço, o parâmetro reprova); (c) torcer o aparelho no próprio eixo (ponta
   fixa) **não** desloca a mira perceptivelmente; (d) a mira responde sem atraso
   perceptível ("a mira obedece" — a suavização padrão não pode ser sentida como

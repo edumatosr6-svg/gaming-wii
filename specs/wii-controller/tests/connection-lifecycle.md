@@ -22,7 +22,14 @@ marcado como **[manual/hardware]**.
   servidor (critério F9.4).
 - **C5 — Calibração não sobrevive à reconexão de forma residual**
   Dado uma sessão antiga calibrada com offset X, quando uma nova sessão conecta e
-  envia `motion` sem calibrar, então o offset aplicado é o padrão (nulo), não X.
+  envia `motion` sem calibrar, então o offset aplicado é o padrão (nulo), não X — e os
+  alcances aplicados são `DEFAULT_RANGE_DEG` até chegar um `calibrate` com `ranges`.
+  *O servidor não guarda perfil entre sessões; quem lembra os alcances é o cliente
+  (P3.4), e ele os reenvia.*
+- **C5b — Reenvio de alcances após reconexão**
+  Dado uma nova sessão que recebe `calibrate` com `ranges` e `center: null` logo após o
+  `hello`, então os quatro alcances passam a valer e o centro continua o padrão até uma
+  captura de centro (P3.4, F9).
 - **C6 — Início do servidor**
   Dado o servidor iniciado em porta livre, então HTTP responde 200 nas rotas do
   controle e do jogo e as URLs impressas contêm IP e porta (critérios F1.1, F1.2 —
